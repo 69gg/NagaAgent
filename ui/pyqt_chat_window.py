@@ -147,6 +147,61 @@ class AutoFitLabel(QLabel):
         font.setPointSize(max(font_size, 8))
         self.setFont(font)
 
+class ImageLabel(QLabel):
+    """自定义图片标签，确保图片头部不被切掉"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.setMinimumSize(1, 1)
+        self.setMaximumSize(16777215, 16777215)
+        self.setStyleSheet('background:transparent; border: none;')
+    
+    def setPixmap(self, pixmap):
+        """重写setPixmap方法，调整图片位置确保头部不被切掉"""
+        super().setPixmap(pixmap)
+        
+        # 如果有pixmap，调整显示位置
+        if pixmap is not None and not pixmap.isNull():
+            self.adjust_image_position()
+    
+    def adjust_image_position(self):
+        """调整图片位置，确保头部不被切掉"""
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return
+        
+        # 获取标签和图片的尺寸
+        label_width = self.width()
+        label_height = self.height()
+        pixmap_width = pixmap.width()
+        pixmap_height = pixmap.height()
+        
+        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
+            return
+        
+        # 计算缩放比例
+        width_ratio = label_width / pixmap_width
+        height_ratio = label_height / pixmap_height
+        scale_ratio = max(width_ratio, height_ratio)
+        
+        # 计算缩放后的图片尺寸
+        scaled_width = int(pixmap_width * scale_ratio)
+        scaled_height = int(pixmap_height * scale_ratio)
+        
+        # 计算图片在标签中的位置
+        # 水平居中，垂直方向确保顶部对齐
+        x = (label_width - scaled_width) // 2
+        y = 0  # 顶部对齐
+        
+        # 设置图片的显示区域
+        self.setContentsMargins(x, y, 0, 0)
+    
+    def resizeEvent(self, event):
+        """重写resizeEvent，调整图片位置"""
+        super().resizeEvent(event)
+        self.adjust_image_position()
+
 class ChatWindow(QWidget):
     def __init__(s):
         super().__init__()
@@ -268,7 +323,7 @@ class ChatWindow(QWidget):
         # 侧栏（图片显示区域）- 使用自定义动画Widget
         s.side = AnimatedSideWidget()
         s.collapsed_width = 400  # 收缩状态宽度
-        s.expanded_width = 800  # 展开状态宽度
+        s.expanded_width = 600  # 展开状态宽度（设置页面）
         s.side.setMinimumWidth(s.collapsed_width)  # 设置最小宽度为收缩状态
         s.side.setMaximumWidth(s.collapsed_width)  # 初始状态为收缩
         
@@ -290,12 +345,7 @@ class ChatWindow(QWidget):
         s.side.setCursor(Qt.PointingHandCursor)
         
         stack=QStackedLayout(s.side);stack.setContentsMargins(5,5,5,5)
-        s.img=QLabel(s.side)
-        s.img.setSizePolicy(QSizePolicy.Ignored,QSizePolicy.Ignored)
-        s.img.setAlignment(Qt.AlignCenter)
-        s.img.setMinimumSize(1,1)
-        s.img.setMaximumSize(16777215,16777215)
-        s.img.setStyleSheet('background:transparent; border: none;')
+        s.img=ImageLabel(s.side)  # 使用自定义的ImageLabel
         stack.addWidget(s.img)
         nick=QLabel(f"● 娜迦{config.system.version}",s.side)
         nick.setStyleSheet("""
@@ -428,7 +478,7 @@ class ChatWindow(QWidget):
             p = os.path.join(os.path.dirname(__file__), 'standby.png')
             q = QPixmap(p)
             if os.path.exists(p) and not q.isNull():
-                # 确保图片完全填满侧栏，无空隙
+                # 保持原有放大缩小逻辑
                 parent_width = s.img.parent().width()
                 parent_height = s.img.parent().height()
                 s.img.setPixmap(q.scaled(parent_width, parent_height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
@@ -703,10 +753,10 @@ class ChatWindow(QWidget):
                 current_height = s.side.height() - 10
                 
                 if current_width > 50 and current_height > 50:  # 避免过小尺寸
-                    # 实时缩放并设置图片
+                    # 保持原有放大缩小逻辑
                     scaled_pixmap = s._original_pixmap.scaled(
                         current_width, current_height, 
-                        Qt.KeepAspectRatioByExpanding, 
+                        Qt.KeepAspectRatioByExpanding,  # 保持原有逻辑
                         Qt.FastTransformation  # 使用快速变换，提高性能
                     )
                     s.img.setPixmap(scaled_pixmap)
@@ -722,7 +772,7 @@ class ChatWindow(QWidget):
                 actual_height = s.side.height() - 10
                 final_pixmap = s._original_pixmap.scaled(
                     actual_width, actual_height,
-                    Qt.KeepAspectRatioByExpanding,
+                    Qt.KeepAspectRatioByExpanding,  # 保持原有逻辑
                     Qt.SmoothTransformation  # 最终使用高质量变换
                 )
                 s.img.setPixmap(final_pixmap)
