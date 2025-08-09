@@ -305,7 +305,7 @@ class ChatWindow(QWidget):
         # 侧栏（图片显示区域）- 使用自定义动画Widget
         s.side = AnimatedSideWidget()
         s.collapsed_width = 400  # 收缩状态宽度
-        s.expanded_width = 600  # 展开状态宽度（设置页面）
+        s.expanded_width = window_width // 2  # 展开状态宽度（设置页面）：窗口宽度的一半
         s.side.setMinimumWidth(s.collapsed_width)  # 设置最小宽度为收缩状态
         s.side.setMaximumWidth(s.collapsed_width)  # 初始状态为收缩
         
