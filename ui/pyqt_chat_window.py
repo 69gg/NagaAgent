@@ -148,7 +148,7 @@ class AutoFitLabel(QLabel):
         self.setFont(font)
 
 class ImageLabel(QLabel):
-    """自定义图片标签，确保图片头部不被切掉"""
+    """自定义图片标签，支持不同的缩放模式"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
@@ -156,6 +156,14 @@ class ImageLabel(QLabel):
         self.setMinimumSize(1, 1)
         self.setMaximumSize(16777215, 16777215)
         self.setStyleSheet('background:transparent; border: none;')
+        self.expanded_mode = False  # 标记是否为展开模式（设置页面）
+    
+    def set_expanded_mode(self, expanded):
+        """设置展开模式"""
+        self.expanded_mode = expanded
+        # 设置对齐方式：都使用顶部对齐，确保头部不被切断
+        self.setAlignment(Qt.AlignHCenter | Qt.AlignTop)  # 顶部对齐
+        self.adjust_image_position()
     
     def setPixmap(self, pixmap):
         """重写setPixmap方法，调整图片位置确保头部不被切掉"""
@@ -166,36 +174,10 @@ class ImageLabel(QLabel):
             self.adjust_image_position()
     
     def adjust_image_position(self):
-        """调整图片位置，确保头部不被切掉"""
-        pixmap = self.pixmap()
-        if pixmap is None or pixmap.isNull():
-            return
-        
-        # 获取标签和图片的尺寸
-        label_width = self.width()
-        label_height = self.height()
-        pixmap_width = pixmap.width()
-        pixmap_height = pixmap.height()
-        
-        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
-            return
-        
-        # 计算缩放比例
-        width_ratio = label_width / pixmap_width
-        height_ratio = label_height / pixmap_height
-        scale_ratio = max(width_ratio, height_ratio)
-        
-        # 计算缩放后的图片尺寸
-        scaled_width = int(pixmap_width * scale_ratio)
-        scaled_height = int(pixmap_height * scale_ratio)
-        
-        # 计算图片在标签中的位置
-        # 水平居中，垂直方向确保顶部对齐
-        x = (label_width - scaled_width) // 2
-        y = 0  # 顶部对齐
-        
-        # 设置图片的显示区域
-        self.setContentsMargins(x, y, 0, 0)
+        """调整图片位置，根据模式采用不同策略"""
+        # 这个方法现在主要通过 setPixmap 和 set_expanded_mode 调用
+        # 实际的缩放逻辑在 toggle_full_img 中处理
+        pass
     
     def resizeEvent(self, event):
         """重写resizeEvent，调整图片位置"""
@@ -690,6 +672,8 @@ class ChatWindow(QWidget):
                     border: 1px solid rgba(255, 255, 255, 80);
                 }}
             """)
+            # 设置立绘为展开模式
+            s.img.set_expanded_mode(True)
         else:  # 收缩状态 - 主界面聊天模式
             s.input_wrap.show()  # 显示输入框
             s.chat_stack.setCurrentIndex(0)  # 切换到聊天页
@@ -704,6 +688,8 @@ class ChatWindow(QWidget):
                     border: 1px solid rgba(255, 255, 255, 40);
                 }}
             """)
+            # 设置立绘为正常模式
+            s.img.set_expanded_mode(False)
         # --- 立即切换界面状态 END ---
         
         # 创建优化后的动画组
@@ -753,12 +739,21 @@ class ChatWindow(QWidget):
                 current_height = s.side.height() - 10
                 
                 if current_width > 50 and current_height > 50:  # 避免过小尺寸
-                    # 保持原有放大缩小逻辑
-                    scaled_pixmap = s._original_pixmap.scaled(
-                        current_width, current_height, 
-                        Qt.KeepAspectRatioByExpanding,  # 保持原有逻辑
-                        Qt.FastTransformation  # 使用快速变换，提高性能
-                    )
+                    # 根据模式选择不同的缩放逻辑
+                    if s.full_img:
+                        # 展开模式：填满容器，确保头部不被切断
+                        scaled_pixmap = s._original_pixmap.scaled(
+                            current_width, current_height, 
+                            Qt.KeepAspectRatioByExpanding,  # 填满容器，可能裁剪
+                            Qt.FastTransformation  # 使用快速变换，提高性能
+                        )
+                    else:
+                        # 正常模式：填满容器显示原图
+                        scaled_pixmap = s._original_pixmap.scaled(
+                            current_width, current_height, 
+                            Qt.KeepAspectRatioByExpanding,  # 填满容器，可能裁剪
+                            Qt.FastTransformation  # 使用快速变换，提高性能
+                        )
                     s.img.setPixmap(scaled_pixmap)
                     s.img.resize(current_width, current_height)
                     
@@ -770,11 +765,21 @@ class ChatWindow(QWidget):
             if hasattr(s, '_original_pixmap') and not s._original_pixmap.isNull():
                 actual_width = target_width - 10
                 actual_height = s.side.height() - 10
-                final_pixmap = s._original_pixmap.scaled(
-                    actual_width, actual_height,
-                    Qt.KeepAspectRatioByExpanding,  # 保持原有逻辑
-                    Qt.SmoothTransformation  # 最终使用高质量变换
-                )
+                # 根据模式选择不同的缩放逻辑
+                if s.full_img:
+                    # 展开模式：填满容器，确保头部不被切断
+                    final_pixmap = s._original_pixmap.scaled(
+                        actual_width, actual_height,
+                        Qt.KeepAspectRatioByExpanding,  # 填满容器，可能裁剪
+                        Qt.SmoothTransformation  # 最终使用高质量变换
+                    )
+                else:
+                    # 正常模式：填满容器显示原图
+                    final_pixmap = s._original_pixmap.scaled(
+                        actual_width, actual_height,
+                        Qt.KeepAspectRatioByExpanding,  # 填满容器，可能裁剪
+                        Qt.SmoothTransformation  # 最终使用高质量变换
+                    )
                 s.img.setPixmap(final_pixmap)
                 s.img.resize(actual_width, actual_height)
                 
