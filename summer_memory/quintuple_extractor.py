@@ -45,7 +45,7 @@ async def extract_quintuples_async(text):
             response = await client.chat.completions.create(
                 model=config.api.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=4096,  # 增加token限制
+                max_tokens=config.api.max_tokens,  # 从配置文件读取
                 temperature=0.3,  # 降低温度，更确定性输出
                 timeout=600 + (attempt * 5)   # 对于推理模型
             )
@@ -151,7 +151,7 @@ def extract_quintuples(text):
             response = client.chat.completions.create(
                 model=config.api.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=4096,  # 增加token限制
+                max_tokens=config.api.max_tokens,  # 从配置文件读取
                 temperature=0.3,  # 降低温度，更确定性输出
                 timeout=600 + (attempt * 5)   # 对于推理模型
             )
