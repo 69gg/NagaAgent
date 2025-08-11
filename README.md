@@ -1,10 +1,9 @@
 # NagaAgent 3.1
 
-![NagaAgent Logo](https://img.shields.io/badge/NagaAgent-3.0-blue?style=for-the-badge&logo=python&logoColor=white)
+![NagaAgent Logo](https://img.shields.io/badge/NagaAgent-3.1-blue?style=for-the-badge&logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
-![Version](https://img.shields.io/badge/Version-3.0.5-orange?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge)
 
 
