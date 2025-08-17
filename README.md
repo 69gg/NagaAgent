@@ -13,20 +13,22 @@
 
 **🐍 智能对话助手 | 多平台支持 | 丰富生态 | 易于扩展**
 
-[功能特性](#-核心功能) • [快速开始](#-快速开始) • [安装指南](#-详细安装指南) • [API文档](#-restful-api服务) • [配置说明](#-配置说明)
+[功能特性](#-核心功能) • [快速开始](#-快速开始) • [安装指南](#-详细安装指南) • [API文档](#-restful-api服务) • [配置说明](#-配置说明) • [更新日志](#-更新日志) • [更新历史](CHANGELOG.md)
 
 ---
 
 ### 🎯 项目亮点
 
-✅ **🧠 智能记忆**: 基于 Neo4j 的知识图谱记忆系统  
-✅ **🔧 丰富生态**: 支持多种 MCP 服务和 Agent  
-✅ **🎤 语音交互**: 流式语音合成和识别  
-✅ **🖥️ 现代界面**: 美观的 PyQt5 图形界面  
-✅ **🌐 完整 API**: RESTful API 和流式输出  
-✅ **📱 系统托盘**: 后台运行和自启动支持  
-✅ **🔍 智能代理**: 动态服务发现和管理  
+✅ **🧠 智能记忆**: 基于 Neo4j 的 GRAG 知识图谱记忆系统  
+✅ **🔧 丰富生态**: 支持多种 MCP 服务和 Agent 系统  
+✅ **🎤 语音交互**: OpenAI 兼容的流式语音合成服务  
+✅ **🖥️ 现代界面**: 基于 PyQt5 的模块化消息渲染系统  
+✅ **🌐 完整 API**: FastAPI RESTful API 和流式输出  
+✅ **📱 系统托盘**: 完整的后台运行和自启动支持  
+✅ **🔍 智能代理**: 动态服务发现和热插拔管理  
 ✅ **🛡️ 安全可靠**: 会话隔离和权限管理  
+✅ **🤖 多Agent协作**: AgentManager 独立系统支持多Agent协作  
+✅ **🌳 深度思考**: 基于遗传算法的多分支思考引擎  
 
 ---
 
@@ -167,10 +169,14 @@ python check_env.py
 |------|--------|------|
 | **核心框架** | `openai`, `mcp`, `fastapi` | AI对话和API服务 |
 | **GUI界面** | `PyQt5`, `pygame` | 图形用户界面 |
-| **语音处理** | `edge-tts`, `pyaudio` | 语音合成和识别 |
-| **知识图谱** | `py2neo`, `pyvis` | Neo4j图数据库操作 |
+| **语音处理** | `edge-tts`, `pyaudio`, `sounddevice` | 语音合成和识别 |
+| **知识图谱** | `py2neo`, `pyvis`, `matplotlib` | Neo4j图数据库操作 |
 | **浏览器自动化** | `playwright` | 网页操作自动化 |
 | **MCP工具** | `jmcomic`, `fastmcp` | 多种扩展工具 |
+| **系统控制** | `pycaw`, `screen-brightness-control` | 系统功能控制 |
+| **通信协议** | `paho-mqtt`, `websockets` | MQTT和WebSocket通信 |
+| **数据处理** | `numpy`, `pandas`, `scikit-learn` | 数据处理和机器学习 |
+| **文档处理** | `python-docx` | Word文档处理 |
 
 ### ⚠️ 常见问题解决
 
@@ -300,6 +306,7 @@ newgrp docker
 - **上下文记忆**: 智能维护对话历史，支持多轮对话上下文
 - **流式输出**: 实时显示 AI 回复，提升交互体验
 - **工具调用**: 自动解析和执行 LLM 返回的工具调用指令
+- **深度思考**: 基于遗传算法的多分支思考引擎，提供更高质量的回答
 
 ### 🔧 MCP 服务生态
 - **动态服务发现**: 自动扫描和注册所有 MCP 服务
@@ -321,9 +328,11 @@ newgrp docker
 
 ### 🖥️ 用户界面
 - **现代化 GUI**: 基于 PyQt5 的精美图形界面
-- **Markdown 支持**: 完整的 Markdown 语法支持
+- **模块化渲染**: 采用模块化消息渲染系统，支持名字+消息框布局
+- **Markdown 支持**: 完整的 Markdown 语法支持和代码高亮
 - **主题定制**: 支持界面主题、透明度等自定义
 - **响应式设计**: 自适应不同屏幕尺寸
+- **流式更新**: 实时流式消息更新和自动滚动
 
 ### 🌐 API 服务
 - **RESTful API**: 完整的 HTTP API 接口
@@ -338,10 +347,12 @@ newgrp docker
 - **自启动**: 支持注册表方式的自启动功能
 
 ### 🔍 智能 Agent 系统
-- **配置管理**: 统一的 Agent 配置和管理
-- **会话隔离**: 多用户会话完全隔离
-- **占位符替换**: 支持动态内容替换
-- **生命周期管理**: 完整的 Agent 生命周期管理
+- **AgentManager**: 独立的 Agent 注册和调用系统
+- **配置管理**: 统一的 Agent 配置和动态加载
+- **会话隔离**: 多用户会话完全隔离和TTL管理
+- **占位符替换**: 支持Agent配置、环境变量、时间信息等占位符
+- **生命周期管理**: 完整的 Agent 生命周期管理和热插拔
+- **多Agent协作**: 支持多个 Agent 协同工作和任务分配
 
 ---
 
@@ -394,45 +405,66 @@ graph TB
 
 ## 🗂️ 目录结构
 ```
-NagaAgent3.0/
+NagaAgent3.1/
 ├── main.py                     # 主入口
 ├── config.py                   # 全局配置
+├── config.json.example         # 配置文件模板
 ├── conversation_core.py        # 对话核心（含工具调用循环主逻辑）
 ├── apiserver/                  # API服务器模块
 │   ├── api_server.py           # FastAPI服务器
 │   ├── start_server.py         # 启动脚本
+│   ├── message_manager.py      # 消息管理器
 │   └── README.md               # API文档
-├── mcpserver/
+├── mcpserver/                  # MCP服务和Agent系统
 │   ├── mcp_manager.py          # MCP服务管理
 │   ├── mcp_registry.py         # Agent注册与schema元数据
 │   ├── agent_manager.py        # Agent管理器（独立系统）
 │   ├── agent_xxx/              # 各类自定义Agent
 │   │   └── agent-manifest.json # Agent配置文件
-├── agent_configs/              # Agent配置文件目录
-│   └── *.json                  # Agent配置文件
-├── requirements.txt             # 项目依赖
-├── setup.ps1                   # Windows配置脚本
-├── start.bat                   # Windows启动脚本
-├── start_with_tray.bat         # Windows托盘启动脚本
-├── setup_mac.sh                # Mac配置脚本
-├── check_env.py                # 跨平台环境检查
+│   ├── agent_comic_downloader/ # 漫画下载Agent
+│   ├── agent_device_switch/    # 设备控制Agent
+│   ├── agent_memory/           # 记忆管理Agent
+│   ├── agent_naga_portal/      # 娜迦门户Agent
+│   ├── agent_playwright_master/ # 浏览器自动化Agent
+│   ├── agent_weather_time/     # 天气时间Agent
+│   └── Office-Word-MCP-Server-main/ # Word文档处理Agent
+├── thinking/                   # 深度思考引擎
+│   ├── tree_thinking.py        # 核心思考引擎
+│   ├── difficulty_judge.py     # 问题难度评估
+│   ├── genetic_pruning.py     # 遗传算法剪枝
+│   ├── preference_filter.py   # 用户偏好过滤
+│   └── thinking_node.py       # 思考节点结构
 ├── summer_memory/              # GRAG知识图谱记忆系统
 │   ├── memory_manager.py       # 记忆管理器
 │   ├── quintuple_extractor.py  # 五元组提取器
 │   ├── quintuple_graph.py      # Neo4j图谱操作
 │   ├── quintuple_rag_query.py  # 记忆查询
 │   └── quintuple_visualize_v2.py  # 图谱可视化
-├── logs/                       # 日志（含历史txt对话）
-├── voice/                      # 语音相关
+├── voice/                      # 语音交互系统
 │   ├── tts_handler.py          # TTS处理器
-│   └── voice_integration.py    # 语音集成
+│   ├── voice_integration.py    # 语音集成
+│   ├── server.py               # 语音服务器
+│   └── start_voice_service.py  # 语音服务启动脚本
 ├── ui/                         # 前端UI
 │   ├── pyqt_chat_window.py     # PyQt聊天窗口
-│   ├── response_utils.py       # 前端通用响应解析工具
+│   ├── response_utils.py       # 响应解析工具
+│   ├── message_renderer.py     # 消息渲染器
+│   ├── elegant_settings_widget.py # 设置组件
 │   └── tray/                   # 系统托盘模块
 │       ├── console_tray.py     # 控制台托盘功能
 │       ├── auto_start.py       # 自启动管理
 │       └── README.md           # 托盘使用说明
+├── mqtt_tool/                  # MQTT工具
+├── logs/                       # 日志（含历史txt对话）
+├── data/neo4j/                 # Neo4j数据库文件
+├── requirements.txt             # 项目依赖
+├── pyproject.toml             # 项目配置
+├── setup.ps1                   # Windows配置脚本
+├── start.bat                   # Windows启动脚本
+├── start_with_tray.bat         # Windows托盘启动脚本
+├── setup_mac.sh                # Mac配置脚本
+├── start_mac.sh                # Mac启动脚本
+├── check_env.py                # 跨平台环境检查
 └── README.md                   # 项目说明
 ```
 
@@ -777,6 +809,42 @@ GET /memory/stats
 
 ---
 
+## 🌳 深度思考引擎
+
+NagaAgent 3.1 引入了基于遗传算法的多分支思考引擎，提供更高质量的AI回答。
+
+### 核心特性
+
+- **多分支并行思考**: 根据问题难度自动生成多条不同类型的思考路线
+- **问题难度评估**: 通过文本长度、关键词、句式结构等综合判断复杂度
+- **用户偏好系统**: 支持自定义偏好配置，对思考路线进行加权评分
+- **遗传算法剪枝**: 对思考路线进行适应度评估、交叉融合、精英保留
+- **并发线程池**: 思考与API调用分离，提升并发性能
+- **可扩展架构**: 支持自定义分支类型、评分权重、进化策略
+
+### 思考分支类型
+
+- **逻辑分支**: 注重逻辑推理和事实分析
+- **创新分支**: 强调创意思维和独特见解
+- **分析分支**: 深入分析和多角度思考
+- **实用分支**: 关注实际应用和可操作性
+- **哲学分支**: 探讨深层含义和价值思考
+
+### 使用方法
+
+```python
+from thinking import TreeThinkingEngine
+
+# 初始化引擎
+engine = TreeThinkingEngine(api_client=your_api_client, memory_manager=your_memory_manager)
+
+# 启用深度思考
+result = await engine.think_deeply("请分析人工智能未来的发展趋势")
+print(result["answer"])  # 输出综合后的最终答案
+```
+
+---
+
 ## 📝 其它亮点
 - **记忆权重动态调整**: 支持AI/人工标记important，权重/阈值/清理策略全部在`config.py`统一管理
 - **主题归类自动化**: 主题归类、召回、权重提升、清理等全部自动化
@@ -793,6 +861,39 @@ GET /memory/stats
 - **多模型提供商支持**: 支持OpenAI、DeepSeek、Anthropic等多种LLM提供商，每个Agent可独立配置
 - **会话隔离与TTL管理**: 支持多用户多会话隔离，自动清理过期会话数据
 - **统一工具调用接口**: MCP和Agent类型服务通过统一的JSON格式调用，支持混合调用场景
+
+---
+
+## 📋 更新日志
+
+### v3.1.0 (2024-08-17)
+
+#### 🚀 新增功能
+- **深度思考引擎**: 基于遗传算法的多分支思考系统
+- **AgentManager**: 独立的Agent注册和调用系统
+- **模块化UI渲染**: 新的消息渲染系统，支持名字+消息框布局
+- **MQTT通信支持**: 新增MQTT工具模块
+- **Word文档处理**: 集成Office Word MCP服务
+- **漫画下载Agent**: 新增漫画下载功能Agent
+
+#### 🔧 功能改进
+- **语音服务升级**: OpenAI兼容的TTS服务，支持多种音频格式
+- **系统托盘增强**: 完整的后台运行和自启动支持
+- **配置管理优化**: 统一的配置文件结构和环境变量支持
+- **依赖管理**: 使用pyproject.toml进行现代化依赖管理
+- **Agent热插拔**: 支持运行时动态加载和卸载Agent
+
+#### 🐛 问题修复
+- **内存泄漏**: 修复会话管理中的内存泄漏问题
+- **并发处理**: 改进多线程并发处理的稳定性
+- **配置验证**: 增强配置文件的验证和错误处理
+- **UI响应**: 优化UI界面的响应速度和用户体验
+
+#### 📚 文档更新
+- 完善所有模块的README文档
+- 更新安装和配置指南
+- 添加API接口文档
+- 增加故障排除指南
 
 ---
 

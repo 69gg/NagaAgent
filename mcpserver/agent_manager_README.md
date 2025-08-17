@@ -1,17 +1,20 @@
-# Agent管理器使用说明
+# AgentManager 使用说明
 
 ## 概述
 
-Agent管理器是一个独立的Agent注册和调用系统，支持从配置文件动态加载Agent定义，提供统一的调用接口。参考了JavaScript版本的AgentAssistant机制，实现了类似的功能。
+AgentManager是NagaAgent 3.1中独立的Agent注册和调用系统，支持从配置文件动态加载Agent定义，提供统一的调用接口和完整的生命周期管理。参考了JavaScript版本的AgentAssistant机制，实现了类似的功能。
 
 ## 主要特性
 
 - ✅ **动态配置加载**: 从JSON配置文件自动加载Agent定义
 - ✅ **会话管理**: 支持多会话历史记录和上下文管理
-- ✅ **占位符替换**: 支持`{{AgentName}}`和`{{MaidName}}`占位符
-- ✅ **定期清理**: 自动清理过期的会话上下文
+- ✅ **智能占位符替换**: 支持Agent配置、环境变量、时间信息等多种占位符
+- ✅ **定期清理**: 自动清理过期的会话上下文（TTL管理）
 - ✅ **错误处理**: 完善的错误处理和日志记录
 - ✅ **中文友好**: 完全支持中文界面和提示词
+- ✅ **多模型支持**: 支持OpenAI、DeepSeek、Anthropic等多种LLM提供商
+- ✅ **热重载**: 支持运行时重新加载配置，无需重启系统
+- ✅ **会话隔离**: 多用户会话完全隔离，支持独立上下文
 
 ## 文件结构
 
@@ -131,17 +134,30 @@ result2 = await call_agent("小助手", "你好", session_id="user_b")
 - 会话超过`context_ttl_hours`小时自动过期
 - 每小时自动清理过期的会话
 
-## 占位符支持
+## 智能占位符支持
 
 在系统提示词中可以使用以下占位符：
 
-- `{{AgentName}}`: 替换为Agent的名称
-- `{{MaidName}}`: 同`{{AgentName}}`，保持兼容性
+### Agent配置占位符
+- `{{AgentName}}`: Agent名称
+- `{{Description}}`: 描述信息
+- `{{ModelId}}`: 模型ID
+- `{{Temperature}}`: 温度参数
+- `{{MaxTokens}}`: 最大输出token数
+- `{{ModelProvider}}`: 模型提供商
 
-示例：
+### 环境变量占位符
+- `{{ENV_VAR_NAME}}`: 系统环境变量
+
+### 时间占位符
+- `{{CurrentTime}}`: 当前时间 (HH:MM:SS)
+- `{{CurrentDate}}`: 当前日期 (YYYY-MM-DD)
+- `{{CurrentDateTime}}`: 完整时间 (YYYY-MM-DD HH:MM:SS)
+
+### 示例配置
 ```json
 {
-  "system_prompt": "你是一个AI助手，名叫{{AgentName}}。请用友好的语气回复用户。"
+  "system_prompt": "你是{{AgentName}}，一个专业的{{Description}}。\n\n当前时间：{{CurrentDateTime}}\n模型：{{ModelId}}\n温度：{{Temperature}}\n\n请用中文回答，保持专业和友好的态度。"
 }
 ```
 
