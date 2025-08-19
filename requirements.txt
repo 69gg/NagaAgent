@@ -65,6 +65,9 @@ pyaudio>=0.2.14
 edge-tts>=7.0.2
 emoji>=2.8.0
 
+# 语音识别相关依赖
+winrt-runtime>=3.2.1
+
 # 系统托盘相关依赖
 pystray>=0.19.4
 pillow>=10.0.0

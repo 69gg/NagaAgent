@@ -261,18 +261,24 @@ class NagaConversation: # 对话主类
         if len(self.messages) > max_messages:
             self.messages = self.messages[-max_messages:]
 
-    async def _call_llm(self, messages: List[Dict]) -> Dict:
-        """调用LLM API"""
+    async def _call_llm(self, messages: List[Dict], use_stream: bool = None) -> Dict:
+        """调用LLM API - 统一使用流式处理"""
         try:
             resp = await self.async_client.chat.completions.create(
                 model=config.api.model, 
                 messages=messages, 
                 temperature=config.api.temperature, 
                 max_tokens=config.api.max_tokens, 
-                stream=False  # 工具调用循环中不使用流式
+                stream=True  # 统一使用流式
             )
+            
+            # 流式响应处理
+            content = ""
+            async for chunk in resp:
+                if chunk.choices[0].delta.content:
+                    content += chunk.choices[0].delta.content
             return {
-                'content': resp.choices[0].message.content,
+                'content': content,
                 'status': 'success'
             }
         except RuntimeError as e:
@@ -285,10 +291,16 @@ class NagaConversation: # 对话主类
                     messages=messages, 
                     temperature=config.api.temperature, 
                     max_tokens=config.api.max_tokens, 
-                    stream=False
+                    stream=True
                 )
+                
+                # 流式响应处理
+                content = ""
+                async for chunk in resp:
+                    if chunk.choices[0].delta.content:
+                        content += chunk.choices[0].delta.content
                 return {
-                    'content': resp.choices[0].message.content,
+                    'content': content,
                     'status': 'success'
                 }
             else:
@@ -463,34 +475,92 @@ class NagaConversation: # 对话主类
             #     import asyncio
             #     thinking_task = asyncio.create_task(self._async_thinking_judgment(u))
             
-            # 普通模式：走工具调用循环（根据配置决定是否流式）
+            # 流式处理：实时检测工具调用
             try:
-                # 根据配置决定是否使用流式处理
-                is_streaming = config.system.stream_mode
-                result = await tool_call_loop(msgs, self.mcp, self._call_llm, is_streaming=is_streaming)
-                final_content = result['content']
-                recursion_depth = result['recursion_depth']
+                # 导入流式工具调用提取器
+                from apiserver.streaming_tool_extractor import StreamingToolCallExtractor
+                tool_extractor = StreamingToolCallExtractor(self.mcp)
                 
-                if recursion_depth > 0:
-                    print(f"工具调用循环完成，共执行 {recursion_depth} 轮")
+                # 用于累积前端显示的纯文本（不包含工具调用）
+                display_text = ""
                 
-                # 根据配置决定输出方式
-                if is_streaming:
-                    # 流式输出最终结果
-                    for line in final_content.splitlines():
-                        yield ("娜迦", line)
-                else:
-                    # 非流式输出完整结果
-                    yield ("娜迦", final_content)
+                # 设置回调函数
+                def on_text_chunk(text: str, chunk_type: str):
+                    """处理文本块 - 发送到前端显示"""
+                    if chunk_type == "chunk":
+                        nonlocal display_text
+                        display_text += text
+                        return ("娜迦", text)
+                    return None
                 
-                # 保存对话历史
-                self.messages += [{"role": "user", "content": u}, {"role": "assistant", "content": final_content}]
-                self.save_log(u, final_content)
+                def on_sentence(sentence: str, sentence_type: str):
+                    """处理完整句子"""
+                    if sentence_type == "sentence":
+                        print(f"完成句子: {sentence}")
+                    return None
                 
-                # GRAG记忆存储（开发者模式不写入）
+                def on_tool_call(tool_call: str, tool_type: str):
+                    """处理工具调用 - 不发送到前端"""
+                    if tool_type == "tool_call":
+                        print(f"🔧 检测到工具调用: {tool_call[:100]}...")
+                    return None
+                
+                def on_tool_result(result: str, result_type: str):
+                    """处理工具结果 - 不发送到前端"""
+                    if result_type == "tool_result":
+                        print(f"✅ 工具执行完成: {result[:100]}...")
+                    elif result_type == "tool_error":
+                        print(f"❌ 工具执行错误: {result}")
+                    return None
+                
+                # 设置回调
+                tool_extractor.set_callbacks(
+                    on_text_chunk=on_text_chunk,
+                    on_sentence=on_sentence,
+                    on_tool_call=on_tool_call,
+                    on_tool_result=on_tool_result
+                )
+                
+                # 调用LLM API - 流式模式
+                resp = await self.async_client.chat.completions.create(
+                    model=config.api.model,
+                    messages=msgs,
+                    temperature=config.api.temperature,
+                    max_tokens=config.api.max_tokens,
+                    stream=True
+                )
+                
+                # 处理流式响应
+                async for chunk in resp:
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        # 使用流式工具调用提取器处理内容
+                        results = await tool_extractor.process_text_chunk(content)
+                        if results:
+                            for result in results:
+                                if isinstance(result, tuple) and len(result) == 2:
+                                    yield result
+                                elif isinstance(result, str):
+                                    yield ("娜迦", result)
+                
+                # 完成处理
+                final_results = await tool_extractor.finish_processing()
+                if final_results:
+                    for result in final_results:
+                        if isinstance(result, tuple) and len(result) == 2:
+                            yield result
+                        elif isinstance(result, str):
+                            yield ("娜迦", result)
+                
+                # 保存对话历史（使用前端显示的纯文本）
+                self.messages += [{"role": "user", "content": u}, {"role": "assistant", "content": display_text}]
+                self.save_log(u, display_text)
+                
+                # GRAG记忆存储（开发者模式不写入）- 使用前端显示的纯文本
                 if self.memory_manager and not self.dev_mode:
                     try:
-                        await self.memory_manager.add_conversation_memory(u, final_content)
+                        # 使用前端显示的纯文本进行五元组提取
+                        await self.memory_manager.add_conversation_memory(u, display_text)
                     except Exception as e:
                         logger.error(f"GRAG记忆存储失败: {e}")
                 

@@ -1,0 +1,2 @@
+# 联网搜索Agent依赖
+requests>=2.32.3

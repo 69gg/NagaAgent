@@ -141,18 +141,127 @@ class EnhancedWorker(QThread):
 
 
 class StreamingWorker(EnhancedWorker):
-    """流式处理Worker，专门优化流式对话体验"""
+    """流式处理Worker，专门优化流式对话体验 - 支持流式工具调用提取"""
     
     # 额外信号
     stream_chunk = pyqtSignal(str)  # 流式数据块
     stream_complete = pyqtSignal()  # 流式完成
+    tool_call_detected = pyqtSignal(str)  # 工具调用检测信号
+    tool_result_received = pyqtSignal(str)  # 工具结果信号
     
     def __init__(self, naga, user_input, parent=None):
         super().__init__(naga, user_input, parent)
         self.streaming_buffer = ""
         
+        # 导入流式工具调用提取器
+        try:
+            # 添加项目根目录到Python路径
+            import sys
+            import os
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if project_root not in sys.path:
+                sys.path.insert(0, project_root)
+            
+            from apiserver.streaming_tool_extractor import StreamingToolCallExtractor
+            self.tool_extractor = StreamingToolCallExtractor(self.naga.mcp if hasattr(self.naga, 'mcp') else None)
+            self.tool_extractor.set_callbacks(
+                on_text_chunk=self._on_text_chunk_sync,
+                on_sentence=self._on_sentence_sync,
+                on_tool_call=self._on_tool_call_sync,
+                on_tool_result=self._on_tool_result_sync
+            )
+        except ImportError as e:
+            print(f"流式工具调用提取器导入失败: {e}")
+            self.tool_extractor = None
+        
+    async def _on_text_chunk(self, text: str, chunk_type: str):
+        """处理文本块回调"""
+        if chunk_type == "chunk":
+            # 发送到前端显示
+            self.stream_chunk.emit(text)
+            
+            # 异步发送到语音集成
+            if self.voice_integration:
+                try:
+                    import threading
+                    threading.Thread(
+                        target=self.voice_integration.receive_text_chunk,
+                        args=(text,),
+                        daemon=True
+                    ).start()
+                except Exception as e:
+                    print(f"语音集成错误: {e}")
+    
+    def _on_text_chunk_sync(self, text: str, chunk_type: str):
+        """同步处理文本块回调（用于非异步环境）"""
+        if chunk_type == "chunk":
+            # 发送到前端显示
+            self.stream_chunk.emit(text)
+            
+            # 异步发送到语音集成
+            if self.voice_integration:
+                try:
+                    import threading
+                    threading.Thread(
+                        target=self.voice_integration.receive_text_chunk,
+                        args=(text,),
+                        daemon=True
+                    ).start()
+                except Exception as e:
+                    print(f"语音集成错误: {e}")
+    
+    async def _on_sentence(self, sentence: str, sentence_type: str):
+        """处理完整句子回调"""
+        if sentence_type == "sentence":
+            # 句子级别的特殊处理
+            print(f"完成句子: {sentence}")
+            # 可以在这里添加语音合成逻辑
+    
+    def _on_sentence_sync(self, sentence: str, sentence_type: str):
+        """同步处理句子回调（用于非异步环境）"""
+        if sentence_type == "sentence":
+            # 句子级别的特殊处理
+            # print(f"完成句子: {sentence}")  # 调试输出，已注释
+            pass  # 可以在这里添加语音合成逻辑
+    
+    async def _on_tool_call(self, tool_call: str, tool_type: str):
+        """处理工具调用回调"""
+        if tool_type == "tool_call":
+            # 发送工具调用检测信号
+            self.tool_call_detected.emit("正在执行工具调用...")
+            print(f"检测到工具调用: {tool_call[:100]}...")
+    
+    def _on_tool_call_sync(self, tool_call: str, tool_type: str):
+        """同步处理工具调用回调（用于非异步环境）"""
+        if tool_type == "tool_call":
+            # 发送工具调用检测信号
+            self.tool_call_detected.emit("正在执行工具调用...")
+            print(f"检测到工具调用: {tool_call[:100]}...")
+    
+    async def _on_tool_result(self, result: str, result_type: str):
+        """处理工具结果回调"""
+        if result_type == "tool_result":
+            # 发送工具结果信号
+            self.tool_result_received.emit(f"工具执行结果: {result[:100]}...")
+            print(f"工具执行完成: {result[:100]}...")
+        elif result_type == "tool_error":
+            # 发送错误信号
+            self.tool_result_received.emit(f"工具执行错误: {result}")
+            print(f"工具执行错误: {result}")
+    
+    def _on_tool_result_sync(self, result: str, result_type: str):
+        """同步处理工具结果回调（用于非异步环境）"""
+        if result_type == "tool_result":
+            # 发送工具结果信号
+            self.tool_result_received.emit(f"工具执行结果: {result[:100]}...")
+            print(f"工具执行完成: {result[:100]}...")
+        elif result_type == "tool_error":
+            # 发送错误信号
+            self.tool_result_received.emit(f"工具执行错误: {result}")
+            print(f"工具执行错误: {result}")
+        
     async def process_with_progress(self):
-        """流式处理优化版本"""
+        """流式处理优化版本 - 支持流式工具调用提取"""
         start_time = time.time()
         
         try:
@@ -173,20 +282,63 @@ class StreamingWorker(EnhancedWorker):
                 if self.is_cancelled:
                     break
                 
-                # 处理chunk - 不进行extract_message处理，直接累积原始内容
+                # 处理chunk
                 if isinstance(chunk, tuple) and len(chunk) == 2:
                     speaker, content = chunk
                     if speaker == "娜迦":
                         content_str = str(content)
                         result_chunks.append(content_str)
                         
-                        # 立即发送流式数据到前端显示
+                        # 使用流式工具调用提取器处理
+                        if self.tool_extractor:
+                            try:
+                                # 处理文本块，获取结果
+                                results = await self.tool_extractor.process_text_chunk(content_str)
+                                # 文本通过回调函数发送，不需要额外处理
+                            except Exception as e:
+                                print(f"工具调用提取器错误: {e}")
+                                # 回退到原始处理方式
+                                self.stream_chunk.emit(content_str)
+                        else:
+                            # 回退到原始处理方式
+                            self.stream_chunk.emit(content_str)
+                            
+                            # 异步发送文本到语音集成模块
+                            if self.voice_integration:
+                                try:
+                                    import threading
+                                    threading.Thread(
+                                        target=self.voice_integration.receive_text_chunk,
+                                        args=(content_str,),
+                                        daemon=True
+                                    ).start()
+                                except Exception as e:
+                                    print(f"语音集成错误: {e}")
+                        
+                        # 更新缓冲区用于实时显示
+                        self.streaming_buffer += content_str
+                        word_count += len(content_str)
+                else:
+                    content_str = str(chunk)
+                    result_chunks.append(content_str)
+                    
+                    # 使用流式工具调用提取器处理
+                    if self.tool_extractor:
+                        try:
+                            # 处理文本块，获取结果
+                            results = await self.tool_extractor.process_text_chunk(content_str)
+                            # 文本通过回调函数发送，不需要额外处理
+                        except Exception as e:
+                            print(f"工具调用提取器错误: {e}")
+                            # 回退到原始处理方式
+                            self.stream_chunk.emit(content_str)
+                    else:
+                        # 回退到原始处理方式
                         self.stream_chunk.emit(content_str)
                         
-                        # 异步发送文本到语音集成模块（不阻塞前端显示）
+                        # 异步发送文本到语音集成模块
                         if self.voice_integration:
                             try:
-                                # 使用线程池异步处理音频，不阻塞UI
                                 import threading
                                 threading.Thread(
                                     target=self.voice_integration.receive_text_chunk,
@@ -195,30 +347,11 @@ class StreamingWorker(EnhancedWorker):
                                 ).start()
                             except Exception as e:
                                 print(f"语音集成错误: {e}")
-                        
-                        # 更新缓冲区用于实时显示
-                        self.streaming_buffer += content_str
-                        word_count += len(content_str)
-                else:
-                    content_str = str(chunk)
-                    result_chunks.append(content_str)
-                    self.stream_chunk.emit(content_str)
-                    
-                    # 异步发送文本到语音集成模块
-                    if self.voice_integration:
-                        try:
-                            threading.Thread(
-                                target=self.voice_integration.receive_text_chunk,
-                                args=(content_str,),
-                                daemon=True
-                            ).start()
-                        except Exception as e:
-                            print(f"语音集成错误: {e}")
                     
                     self.streaming_buffer += content_str
                     word_count += len(content_str)
                 
-                # 动态更新状态 - 优化显示逻辑
+                # 动态更新状态
                 if word_count < 50:
                     status = "开始回复..."
                     progress = 35
@@ -237,19 +370,21 @@ class StreamingWorker(EnhancedWorker):
                 # 减少休眠时间，提升响应速度
                 await asyncio.sleep(0.001)
             
+            # 完成处理
+            if self.tool_extractor:
+                await self.tool_extractor.finish_processing()
+            
             if not self.is_cancelled:
                 # 立即发送完成信号，不等待音频处理
                 self.stream_complete.emit()
                 
-                # 异步发送最终完整文本到语音集成模块（不阻塞前端）
+                # 流式处理已完成，语音集成由apiserver处理
+                # 这里只需要完成处理信号
                 if self.voice_integration:
                     try:
-                        final_text = ''.join(result_chunks)
-                        # 使用线程池异步处理，确保前端立即显示
                         import threading
                         threading.Thread(
-                            target=self.voice_integration.receive_final_text,
-                            args=(final_text,),
+                            target=self.voice_integration.finish_processing,
                             daemon=True
                         ).start()
                     except Exception as e:
@@ -306,17 +441,23 @@ class BatchWorker(EnhancedWorker):
                     result_chunks.append(str(chunk))
             
             if not self.is_cancelled:
-                # 异步发送最终完整文本到语音集成模块（不阻塞前端）
+                # 模拟流式处理，逐块发送给voice模块
                 if self.voice_integration:
                     try:
                         final_text = ''.join(result_chunks)
-                        # 使用线程池异步处理，确保前端立即显示
+                        # 模拟流式文本输入
                         import threading
-                        threading.Thread(
-                            target=self.voice_integration.receive_final_text,
-                            args=(final_text,),
-                            daemon=True
-                        ).start()
+                        def simulate_streaming():
+                            # 按句子分割发送
+                            sentences = final_text.split('。')
+                            for sentence in sentences:
+                                if sentence.strip():
+                                    self.voice_integration.receive_text_chunk(sentence.strip() + '。')
+                                    time.sleep(0.1)  # 模拟延迟
+                            # 完成处理
+                            self.voice_integration.finish_processing()
+                        
+                        threading.Thread(target=simulate_streaming, daemon=True).start()
                     except Exception as e:
                         print(f"语音集成错误: {e}")
                 

@@ -433,21 +433,7 @@ class NagaPortalAgent:
                 return {
                     "success": True,
                     "status": "balance_success",
-                    "message": f"余额查询成功",
-                    "data": {
-                        "balance": round(balance, 2),  # 总余额 #
-                        "used_balance": round(used_balance, 2),  # 已使用余额 #
-                        "remaining_balance": round(remaining_balance, 2),  # 剩余余额 #
-                        "quota": quota,  # 原始额度 #
-                        "used_quota": used_quota,  # 原始已使用额度 #
-                        "user_info": {
-                            "username": user_data.get("username", ""),
-                            "display_name": user_data.get("display_name", ""),
-                            "group": user_data.get("group", ""),
-                            "request_count": user_data.get("request_count", 0)
-                        },
-                        "original_response": response_data
-                    }
+                    "message": f"余额查询成功，当前余额：{round(remaining_balance, 2)}元",
                 }  # 返回余额信息 #
             else:
                 # 查询失败 #

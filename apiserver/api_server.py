@@ -304,7 +304,7 @@ async def chat(request: ChatRequest):
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
-    """流式对话接口"""
+    """流式对话接口 - 支持流式工具调用提取"""
     if not naga_agent:
         raise HTTPException(status_code=503, detail="NagaAgent未初始化")
     
@@ -332,9 +332,58 @@ async def chat_stream(request: ChatRequest):
                 current_message=request.message
             )
             
-            # 定义LLM调用函数
-            async def call_llm(messages: List[Dict]) -> Dict:
-                """调用LLM API"""
+            # 导入流式工具调用提取器
+            from .streaming_tool_extractor import StreamingToolCallExtractor
+            tool_extractor = StreamingToolCallExtractor(naga_agent.mcp)
+            
+            # 初始化语音集成（如果启用）
+            voice_integration = None
+            if config.system.voice_enabled:
+                try:
+                    from voice.voice_integration import get_voice_integration
+                    voice_integration = get_voice_integration()
+                except Exception as e:
+                    print(f"语音集成初始化失败: {e}")
+            
+            # 设置回调函数
+            def on_text_chunk(text: str, chunk_type: str):
+                """处理文本块 - 直接发送到前端"""
+                if chunk_type == "chunk":
+                    return f"data: {text}\n\n"
+                return None
+            
+            def on_sentence(sentence: str, sentence_type: str):
+                """处理完整句子"""
+                if sentence_type == "sentence":
+                    return f"data: [SENTENCE] {sentence}\n\n"
+                return None
+            
+            def on_tool_call(tool_call: str, tool_type: str):
+                """处理工具调用"""
+                if tool_type == "tool_call":
+                    return f"data: [TOOL_CALL] 正在执行工具调用...\n\n"
+                return None
+            
+            def on_tool_result(result: str, result_type: str):
+                """处理工具结果"""
+                if result_type == "tool_result":
+                    return f"data: [TOOL_RESULT] {result}\n\n"
+                elif result_type == "tool_error":
+                    return f"data: [TOOL_ERROR] {result}\n\n"
+                return None
+            
+            # 设置回调
+            tool_extractor.set_callbacks(
+                on_text_chunk=on_text_chunk,
+                on_sentence=on_sentence,
+                on_tool_call=on_tool_call,
+                on_tool_result=on_tool_result,
+                voice_integration=voice_integration
+            )
+            
+            # 定义LLM调用函数 - 支持真正的流式输出
+            async def call_llm_stream(messages: List[Dict]) -> AsyncGenerator[str, None]:
+                """调用LLM API - 流式模式"""
                 async with aiohttp.ClientSession() as session:
                     # 保存prompt日志
                     prompt_logger.log_prompt(session_id, messages, api_status="sending")
@@ -350,7 +399,7 @@ async def chat_stream(request: ChatRequest):
                             "messages": messages,
                             "temperature": config.api.temperature,
                             "max_tokens": config.api.max_tokens,
-                            "stream": False
+                            "stream": True  # 启用真正的流式输出
                         }
                     ) as resp:
                         if resp.status != 200:
@@ -358,24 +407,48 @@ async def chat_stream(request: ChatRequest):
                             prompt_logger.log_prompt(session_id, messages, api_status="failed")
                             raise HTTPException(status_code=resp.status, detail="LLM API调用失败")
                         
-                        data = await resp.json()
-                        # 保存成功的prompt日志
-                        prompt_logger.log_prompt(session_id, messages, data, api_status="success")
-                        return {
-                            'content': data['choices'][0]['message']['content'],
-                            'status': 'success'
-                        }
+                        # 处理流式响应
+                        async for line in resp.content:
+                            line_str = line.decode('utf-8').strip()
+                            if line_str.startswith('data: '):
+                                data_str = line_str[6:]
+                                if data_str == '[DONE]':
+                                    break
+                                try:
+                                    data = json.loads(data_str)
+                                    if 'choices' in data and len(data['choices']) > 0:
+                                        delta = data['choices'][0].get('delta', {})
+                                        if 'content' in delta:
+                                            content = delta['content']
+                                            # 使用流式工具调用提取器处理内容
+                                            results = await tool_extractor.process_text_chunk(content)
+                                            if results:
+                                                for result in results:
+                                                    yield result
+                                            
+                                except json.JSONDecodeError:
+                                    continue
             
-            # 处理工具调用循环
-            result = await tool_call_loop(messages, naga_agent.mcp, call_llm, is_streaming=True)
+            # 处理流式响应
+            async for chunk in call_llm_stream(messages):
+                yield chunk
             
-            # 流式输出最终结果
-            final_content = result['content']
-            for line in final_content.splitlines():
-                if line.strip():
-                    yield f"data: {line}\n\n"
+            # 完成处理
+            await tool_extractor.finish_processing()
+            
+            # 完成语音处理
+            if voice_integration:
+                try:
+                    import threading
+                    threading.Thread(
+                        target=voice_integration.finish_processing,
+                        daemon=True
+                    ).start()
+                except Exception as e:
+                    print(f"语音集成完成处理错误: {e}")
             
             # 保存对话历史到消息管理器
+            final_content = tool_extractor.text_buffer  # 获取最终内容
             message_manager.add_message(session_id, "user", request.message)
             message_manager.add_message(session_id, "assistant", final_content)
             

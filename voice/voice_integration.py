@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-语音集成模块 - 负责接收文本并调用TTS服务播放音频
-支持Edge TTS和Minimax TTS两种服务
-重构版本：实现真正的异步处理，分离文本显示和音频播放
+语音集成模块 - 重构版本：依赖apiserver的流式TTS实现
+支持接收处理好的普通文本、并发音频合成和pygame播放
 """
 import asyncio
 import logging
@@ -14,7 +13,8 @@ import time
 import hashlib
 import re
 import io
-from typing import Optional, List, Dict
+import base64
+from typing import Optional, List, Dict, Any
 import aiohttp
 import sys
 from pathlib import Path
@@ -26,11 +26,11 @@ from config import config
 
 logger = logging.getLogger("VoiceIntegration")
 
-# 断句正则表达式
-SENTENCE_END_PUNCTUATIONS = r"[。？！；\.\?\!\;]"
+# 简化的句子结束标点（依赖apiserver的预处理）
+SENTENCE_ENDINGS = ["。", "！", "？", "；", ".", "!", "?", ";"]
 
 class VoiceIntegration:
-    """语音集成模块 - 重构版本：真正的异步处理"""
+    """语音集成模块 - 重构版本：依赖apiserver的流式TTS实现"""
     
     def __init__(self):
         self.provider = 'edge_tts'  # 默认使用Edge TTS
@@ -44,11 +44,11 @@ class VoiceIntegration:
         self.audio_temp_dir = Path("logs/audio_temp")
         self.audio_temp_dir.mkdir(parents=True, exist_ok=True)
         
-        # 音频播放队列和状态管理
-        self.audio_queue = Queue()  # 使用标准Queue替代asyncio.Queue
-        self.playing_lock = threading.Lock()
-        self.playing_texts = set()  # 防止重复播放
-        self.audio_files_in_use = set()  # 正在使用的音频文件
+        # 流式处理状态
+        self.text_buffer = ""  # 文本缓冲区
+        self.is_processing = False  # 是否正在处理
+        self.sentence_queue = Queue()  # 句子队列
+        self.audio_queue = Queue()  # 音频队列
         
         # 播放状态控制
         self.is_playing = False
@@ -65,7 +65,7 @@ class VoiceIntegration:
         self.cleanup_thread = threading.Thread(target=self._audio_cleanup_worker, daemon=True)
         self.cleanup_thread.start()
         
-        logger.info("语音集成模块初始化完成（重构版本）")
+        logger.info("语音集成模块初始化完成（重构版本 - 依赖apiserver）")
 
     def _init_pygame_audio(self):
         """初始化pygame音频系统"""
@@ -92,14 +92,14 @@ class VoiceIntegration:
             self.pygame_available = False
 
     def receive_final_text(self, final_text: str):
-        """接收最终完整文本 - 立即处理，不等待音频"""
+        """接收最终完整文本 - 流式处理"""
         if not config.system.voice_enabled:
             return
             
         if final_text and final_text.strip():
             logger.info(f"接收最终文本: {final_text[:100]}")
-            # 立即开始音频处理，不阻塞前端显示
-            self._process_audio_async(final_text)
+            # 流式处理最终文本
+            self._process_text_stream(final_text)
 
     def receive_text_chunk(self, text: str):
         """接收文本片段 - 流式处理"""
@@ -108,57 +108,105 @@ class VoiceIntegration:
             
         if text and text.strip():
             # 流式文本直接处理，不累积
-            self._process_audio_async(text.strip())
+            self._process_text_stream(text.strip())
 
-    def _process_audio_async(self, text: str):
-        """异步处理音频，不阻塞主流程"""
+    def _process_text_stream(self, text: str):
+        """处理文本流 - 直接接收apiserver处理好的普通文本"""
+        if not text:
+            return
+            
+        # 将文本添加到缓冲区
+        self.text_buffer += text
+        
+        # 检查是否形成完整句子（简单的标点检测）
+        self._check_and_queue_sentences()
+        
+    def _check_and_queue_sentences(self):
+        """检查并加入句子队列 - 简化版本，依赖apiserver的预处理"""
+        if not self.text_buffer:
+            return
+            
+        # 简单的句子结束检测（apiserver已经处理过复杂的标点分割）
+        sentence_endings = SENTENCE_ENDINGS
+        
+        for ending in sentence_endings:
+            if ending in self.text_buffer:
+                # 找到句子结束位置
+                end_pos = self.text_buffer.find(ending) + 1
+                sentence = self.text_buffer[:end_pos]
+                
+                # 检查句子是否有效
+                if sentence.strip():
+                    # 加入句子队列
+                    self.sentence_queue.put(sentence)
+                    logger.debug(f"处理句子: {sentence[:50]}...")
+                    
+                    # 启动音频合成线程（如果未启动）
+                    if not self.is_processing:
+                        self._start_audio_processing()
+                
+                # 更新缓冲区
+                self.text_buffer = self.text_buffer[end_pos:]
+                break
+        
+    def _start_audio_processing(self):
+        """启动音频处理线程"""
+        if self.is_processing:
+            return
+            
+        self.is_processing = True
+        threading.Thread(target=self._audio_processing_worker, daemon=True).start()
+        
+    def _audio_processing_worker(self):
+        """音频处理工作线程"""
+        logger.info("音频处理工作线程启动")
+        
         try:
-            # 检查是否正在播放相同文本
-            text_hash = hashlib.md5(text.encode()).hexdigest()
-            with self.playing_lock:
-                if text_hash in self.playing_texts:
-                    logger.debug(f"跳过重复播放: {text[:30]}...")
-                    return
-                self.playing_texts.add(text_hash)
-            
-            # 在后台线程中处理音频，不阻塞主流程
-            threading.Thread(
-                target=self._generate_and_play_audio,
-                args=(text,),
-                daemon=True
-            ).start()
-            
+            while True:
+                try:
+                    # 从句子队列获取句子
+                    sentence = self.sentence_queue.get(timeout=1)
+                    
+                    if sentence == "DONE_DONE":
+                        # 处理完成
+                        self.audio_queue.put("DONE_DONE")
+                        break
+                        
+                    # 生成音频
+                    audio_data = self._generate_audio_sync(sentence)
+                    if audio_data:
+                        self.audio_queue.put(audio_data)
+                        logger.debug(f"音频生成完成: {sentence[:30]}...")
+                    else:
+                        logger.warning(f"音频生成失败: {sentence[:30]}...")
+                        
+                except Empty:
+                    # 队列为空，检查是否还有待处理的文本
+                    if self.text_buffer.strip():
+                        # 还有未处理的文本，继续等待
+                        continue
+                    else:
+                        # 没有更多文本，发送完成信号
+                        self.audio_queue.put("DONE_DONE")
+                        break
+                        
         except Exception as e:
-            logger.error(f"创建音频处理任务失败: {e}")
+            logger.error(f"音频处理工作线程错误: {e}")
+        finally:
+            self.is_processing = False
+            logger.info("音频处理工作线程结束")
 
-    def _generate_and_play_audio(self, text: str):
-        """在后台线程中生成并播放音频"""
+    def _generate_audio_sync(self, text: str) -> Optional[bytes]:
+        """同步生成音频数据"""
         try:
             # 文本预处理
             if not getattr(config.tts, 'remove_filter', False):
                 from voice.handle_text import prepare_tts_input_with_context
                 text = prepare_tts_input_with_context(text)
             
-            # 生成音频文件
-            audio_file_path = self._generate_audio_file_sync(text)
-            if audio_file_path:
-                # 加入播放队列
-                self.audio_queue.put(audio_file_path)
-                logger.info(f"音频文件已加入播放队列: {text[:50]}... -> {audio_file_path}")
-            else:
-                logger.warning(f"音频文件生成失败: {text[:50]}...")
+            if not text.strip():
+                return None
                 
-        except Exception as e:
-            logger.error(f"音频处理异常: {e}")
-
-    def _generate_audio_file_sync(self, text: str) -> Optional[str]:
-        """同步生成音频文件"""
-        try:
-            # 生成文件名
-            timestamp = int(time.time() * 1000)
-            filename = f"tts_audio_{timestamp}_{hash(text) % 1000}.{config.tts.default_format}"
-            file_path = self.audio_temp_dir / filename
-            
             headers = {}
             if config.tts.require_api_key:
                 headers["Authorization"] = f"Bearer {config.tts.api_key}"
@@ -181,34 +229,27 @@ class VoiceIntegration:
             
             if response.status_code == 200:
                 audio_data = response.content
-                
-                # 保存到本地文件
-                with open(file_path, 'wb') as f:
-                    f.write(audio_data)
-                
-                # 标记文件正在使用
-                self.audio_files_in_use.add(str(file_path))
-                
-                logger.debug(f"音频文件已保存: {file_path} ({len(audio_data)} bytes)")
-                return str(file_path)
+                logger.debug(f"音频生成成功: {len(audio_data)} bytes")
+                return audio_data
             else:
                 logger.error(f"TTS API调用失败: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
-            logger.error(f"生成音频文件异常: {e}")
+            logger.error(f"生成音频数据异常: {e}")
             return None
 
     def _audio_player_worker(self):
         """音频播放工作线程"""
         logger.info("音频播放工作线程启动")
         
-        # 在工作线程中重新初始化pygame
+        # 在工作线程中检查pygame是否已初始化
         try:
             import pygame
-            pygame.init()
-            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
-            logger.info("音频播放工作线程中pygame初始化成功")
+            if not pygame.mixer.get_init():
+                pygame.init()
+                pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+                logger.info("音频播放工作线程中pygame初始化成功")
         except Exception as e:
             logger.error(f"音频播放工作线程中pygame初始化失败: {e}")
             return
@@ -216,14 +257,16 @@ class VoiceIntegration:
         try:
             while True:
                 try:
-                    # 从队列获取音频文件路径
-                    audio_file_path = self.audio_queue.get(timeout=1)  # 1秒超时
+                    # 从队列获取音频数据
+                    audio_data = self.audio_queue.get(timeout=10)  # 10秒超时
                     
-                    if audio_file_path and os.path.exists(audio_file_path):
-                        logger.info(f"开始播放音频文件: {audio_file_path}")
-                        self._play_audio_file_sync(audio_file_path)
-                    else:
-                        logger.warning(f"音频文件不存在或为空: {audio_file_path}")
+                    if audio_data == "DONE_DONE":
+                        logger.info("音频播放完成")
+                        break
+                        
+                    if audio_data:
+                        # 播放音频数据
+                        self._play_audio_data_sync(audio_data)
                         
                 except Empty:
                     # 队列为空，继续等待
@@ -241,36 +284,37 @@ class VoiceIntegration:
             except:
                 pass
 
-    def _play_audio_file_sync(self, file_path: str):
-        """同步播放音频文件"""
+    def _play_audio_data_sync(self, audio_data: bytes):
+        """同步播放音频数据"""
         try:
             import pygame
+            import io
             import time
             
-            # 检查文件是否存在
-            if not os.path.exists(file_path):
-                logger.error(f"音频文件不存在: {file_path}")
-                return
+            # 停止当前正在播放的音频
+            if pygame.mixer.music.get_busy():
+                pygame.mixer.music.stop()
+                time.sleep(0.1)  # 给一点时间让音频停止
             
-            # 检查文件大小
-            file_size = os.path.getsize(file_path)
-            logger.info(f"音频文件大小: {file_size} 字节")
-            
-            # 加载并播放音频文件
-            pygame.mixer.music.load(file_path)
+            # 从内存中播放音频数据
+            audio_io = io.BytesIO(audio_data)
+            pygame.mixer.music.load(audio_io)
             pygame.mixer.music.play()
             
             # 等待播放完成
+            start_time = time.time()
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
+                # 防止无限等待，设置最长播放时间（5分钟）
+                if time.time() - start_time > 300:
+                    logger.warning("音频播放超时，强制停止")
+                    pygame.mixer.music.stop()
+                    break
             
-            logger.info(f"音频播放完成: {file_path}")
-            
-            # 播放完成后从使用列表中移除
-            self.audio_files_in_use.discard(file_path)
+            logger.debug("音频播放完成")
             
         except Exception as e:
-            logger.error(f"播放音频文件失败: {e}")
+            logger.error(f"播放音频数据失败: {e}")
 
     def _audio_cleanup_worker(self):
         """音频文件清理工作线程"""
@@ -278,15 +322,16 @@ class VoiceIntegration:
         
         while True:
             try:
-                time.sleep(30)  # 每30秒清理一次
+                time.sleep(60)  # 每60秒清理一次
                 
                 # 获取所有音频文件
                 audio_files = list(self.audio_temp_dir.glob(f"*.{config.tts.default_format}"))
                 
-                # 清理不在使用中的文件
+                # 清理文件
                 files_to_clean = []
                 for file_path in audio_files:
-                    if str(file_path) not in self.audio_files_in_use:
+                    # 检查文件是否过旧（超过5分钟）
+                    if time.time() - file_path.stat().st_mtime > 300:
                         files_to_clean.append(file_path)
                 
                 if files_to_clean:
@@ -294,14 +339,41 @@ class VoiceIntegration:
                     for file_path in files_to_clean:
                         try:
                             file_path.unlink()
+                            logger.debug(f"已删除音频文件: {file_path}")
                         except Exception as e:
                             logger.warning(f"删除音频文件失败: {file_path} - {e}")
                     
                     logger.info(f"音频文件清理完成，共清理 {len(files_to_clean)} 个文件")
+                else:
+                    logger.debug("本次清理检查完成，无需要清理的文件")
                     
             except Exception as e:
                 logger.error(f"音频文件清理异常: {e}")
                 time.sleep(5)
+
+    def finish_processing(self):
+        """完成处理，清理剩余内容"""
+        # 处理剩余的文本
+        if self.text_buffer.strip():
+            # 将剩余文本作为最后一个句子处理
+            remaining_text = self.text_buffer.strip()
+            if remaining_text:
+                self.sentence_queue.put(remaining_text)
+                logger.debug(f"处理剩余文本: {remaining_text[:50]}...")
+        
+        # 发送完成信号
+        self.sentence_queue.put("DONE_DONE")
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """获取调试信息"""
+        return {
+            "text_buffer_length": len(self.text_buffer),
+            "sentence_queue_size": self.sentence_queue.qsize(),
+            "audio_queue_size": self.audio_queue.qsize(),
+            "is_processing": self.is_processing,
+            "is_playing": self.is_playing,
+            "temp_files": len(list(self.audio_temp_dir.glob(f"*.{config.tts.default_format}")))
+        }
 
 def get_voice_integration() -> VoiceIntegration:
     """获取语音集成实例"""

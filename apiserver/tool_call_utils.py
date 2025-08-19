@@ -137,7 +137,14 @@ async def tool_call_loop(messages: List[Dict], mcp_manager, llm_caller, is_strea
     
     while recursion_depth < max_recursion:
         try:
-            resp = await llm_caller(current_messages)
+            # 调用LLM，传递流式参数
+            if hasattr(llm_caller, '__code__') and llm_caller.__code__.co_argcount > 1:
+                # 如果llm_caller支持额外参数，传递流式参数
+                resp = await llm_caller(current_messages, use_stream=is_streaming)
+            else:
+                # 兼容旧版本，不传递额外参数
+                resp = await llm_caller(current_messages)
+            
             current_ai_content = resp.get('content', '')
             
             print(f"[DEBUG] 第{recursion_depth + 1}轮LLM回复:")

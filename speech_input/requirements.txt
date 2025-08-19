@@ -1,0 +1,21 @@
+# Windows Runtime (WinRT) 依赖包
+# 语音输入模块必需的依赖
+
+# 核心运行时支持
+winrt-runtime>=3.2.1
+
+# 基础类型和异步支持
+winrt-Windows.Foundation>=3.2.1
+winrt-Windows.Foundation.Collections>=3.2.1
+
+# 语音识别相关
+winrt-Windows.Media.SpeechRecognition>=3.2.1
+winrt-Windows.Media.Capture>=3.2.1
+winrt-Windows.Media.MediaProperties>=3.2.1
+
+# 全局化和系统支持
+winrt-Windows.Globalization>=3.2.1
+winrt-Windows.System>=3.2.1
+
+# 可选：数值计算支持（如果需要）
+# winrt-Windows.Foundation.Numerics>=3.2.1

@@ -1,8 +1,8 @@
 {
   "name": "agent_mqtt_tool",
-  "displayName": "设备开关控制Agent",
+  "displayName": "物联网控制Agent",
   "version": "1.0.0",
-  "description": "通过物联网控制两个设备的开关，支持0/1状态控制。",
+  "description": "通过物联网控制三个设备的开关，支持0/1状态控制。",
   "author": "Naga物联网模块",
   "agentType": "mcp",
   "entryPoint": {

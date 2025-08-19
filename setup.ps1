@@ -41,21 +41,29 @@ try {
 Write-Host "Upgrading pip..." -ForegroundColor Green
 python.exe -m pip install --upgrade pip
 
+# Install setuptools and wheel first (needed for building packages)
+Write-Host "Installing setuptools and wheel..." -ForegroundColor Green
+try {
+    pip install setuptools wheel
+    Write-Host "setuptools and wheel installed successfully" -ForegroundColor Green
+} catch {
+    Write-Host "Warning: Failed to install setuptools and wheel" -ForegroundColor Yellow
+}
+
 # Install core dependencies first (those that need compilation)
 Write-Host "Installing core dependencies (numpy, pandas, scipy)..." -ForegroundColor Green
 try {
-    pip install --only-binary=all numpy pandas scipy
-    Write-Host "Core dependencies installed successfully" -ForegroundColor Green
+    pip install numpy
+    Write-Host "numpy installed successfully" -ForegroundColor Green
 } catch {
-    Write-Host "Warning: Failed to install core dependencies with --only-binary, trying without..." -ForegroundColor Yellow
-    try {
-        pip install numpy pandas scipy
-        Write-Host "Core dependencies installed successfully" -ForegroundColor Green
-    } catch {
-        Write-Host "Error: Failed to install core dependencies. Please install Visual C++ Build Tools first." -ForegroundColor Red
-        Write-Host "Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor Red
-        exit 1
-    }
+    Write-Host "Warning: Failed to install numpy" -ForegroundColor Yellow
+}
+
+try {
+    pip install pandas scipy
+    Write-Host "pandas and scipy installed successfully" -ForegroundColor Green
+} catch {
+    Write-Host "Warning: Failed to install pandas/scipy" -ForegroundColor Yellow
 }
 
 # Install basic dependencies
@@ -87,7 +95,7 @@ foreach ($dep in $gragDeps) {
 
 # Install API server dependencies
 Write-Host "Installing API server dependencies..." -ForegroundColor Green
-$apiDeps = @("flask-cors", "flask", "gevent", "edge-tts", "emoji", "fastapi")
+$apiDeps = @("flask-cors", "flask", "gevent", "fastapi")
 foreach ($dep in $apiDeps) {
     try {
         pip install $dep
@@ -99,7 +107,7 @@ foreach ($dep in $apiDeps) {
 
 # Install network communication dependencies
 Write-Host "Installing network communication dependencies..." -ForegroundColor Green
-$networkDeps = @("uvicorn", "librosa", "websockets")
+$networkDeps = @("librosa", "websockets")
 foreach ($dep in $networkDeps) {
     try {
         pip install $dep
@@ -111,22 +119,8 @@ foreach ($dep in $networkDeps) {
 
 # Install AI/ML dependencies
 Write-Host "Installing AI/ML dependencies..." -ForegroundColor Green
-$aiDeps = @("tqdm", "scikit-learn", "transformers")
+$aiDeps = @("transformers")
 foreach ($dep in $aiDeps) {
-    try {
-        pip install $dep
-        Write-Host "Installed $dep" -ForegroundColor Green
-    } catch {
-        Write-Host "Warning: Failed to install $dep" -ForegroundColor Yellow
-    }
-}
-
-# Install data processing dependencies
-Write-Host "Installing data processing dependencies..." -ForegroundColor Green
-$dataDeps = @("pydantic", "pydantic-settings", "griffe", "anyio", "httpx", "httpx-sse", 
-              "sse-starlette", "starlette", "certifi", "charset-normalizer", "idna", 
-              "urllib3", "typing-extensions", "markdown")
-foreach ($dep in $dataDeps) {
     try {
         pip install $dep
         Write-Host "Installed $dep" -ForegroundColor Green
@@ -147,18 +141,6 @@ foreach ($dep in $guiDeps) {
     }
 }
 
-# Install audio processing dependencies
-Write-Host "Installing audio processing dependencies..." -ForegroundColor Green
-$audioDeps = @("sounddevice", "soundfile", "pyaudio", "edge-tts", "emoji")
-foreach ($dep in $audioDeps) {
-    try {
-        pip install $dep
-        Write-Host "Installed $dep" -ForegroundColor Green
-    } catch {
-        Write-Host "Warning: Failed to install $dep" -ForegroundColor Yellow
-    }
-}
-
 # Install PyQt5
 Write-Host "Installing PyQt5..." -ForegroundColor Green
 try {
@@ -168,9 +150,21 @@ try {
     Write-Host "Warning: Failed to install PyQt5" -ForegroundColor Yellow
 }
 
+# Install audio processing dependencies
+Write-Host "Installing audio processing dependencies..." -ForegroundColor Green
+$audioDeps = @("sounddevice", "pyaudio", "edge-tts", "emoji")
+foreach ($dep in $audioDeps) {
+    try {
+        pip install $dep
+        Write-Host "Installed $dep" -ForegroundColor Green
+    } catch {
+        Write-Host "Warning: Failed to install $dep" -ForegroundColor Yellow
+    }
+}
+
 # Install system tray dependencies
 Write-Host "Installing system tray dependencies..." -ForegroundColor Green
-$trayDeps = @("pystray", "pillow")
+$trayDeps = @("pystray")
 foreach ($dep in $trayDeps) {
     try {
         pip install $dep
@@ -196,6 +190,42 @@ foreach ($dep in $toolDeps) {
 Write-Host "Installing system control dependencies..." -ForegroundColor Green
 $sysDeps = @("screen-brightness-control", "pycaw", "comtypes")
 foreach ($dep in $sysDeps) {
+    try {
+        pip install $dep
+        Write-Host "Installed $dep" -ForegroundColor Green
+    } catch {
+        Write-Host "Warning: Failed to install $dep" -ForegroundColor Yellow
+    }
+}
+
+# Install MCP tool dependencies
+Write-Host "Installing MCP tool dependencies..." -ForegroundColor Green
+$mcpDeps = @("jmcomic", "fastmcp")
+foreach ($dep in $mcpDeps) {
+    try {
+        pip install $dep
+        Write-Host "Installed $dep" -ForegroundColor Green
+    } catch {
+        Write-Host "Warning: Failed to install $dep" -ForegroundColor Yellow
+    }
+}
+
+# Install MQTT communication dependencies
+Write-Host "Installing MQTT communication dependencies..." -ForegroundColor Green
+$mqttDeps = @("paho-mqtt")
+foreach ($dep in $mqttDeps) {
+    try {
+        pip install $dep
+        Write-Host "Installed $dep" -ForegroundColor Green
+    } catch {
+        Write-Host "Warning: Failed to install $dep" -ForegroundColor Yellow
+    }
+}
+
+# Install other dependencies
+Write-Host "Installing other dependencies..." -ForegroundColor Green
+$otherDeps = @("python-docx", "mqtt-tool")
+foreach ($dep in $otherDeps) {
     try {
         pip install $dep
         Write-Host "Installed $dep" -ForegroundColor Green

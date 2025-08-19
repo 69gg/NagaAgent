@@ -2,7 +2,7 @@
   "name": "SystemControlAgent",
   "displayName": "系统控制Agent",
   "version": "1.0.0",
-  "description": "支持电脑控制：定时关机、定时重启、屏幕亮度调节、音量调节。使用Windows API实现优雅的关机重启确认。",
+  "description": "支持电脑控制：定时关机、定时重启、屏幕亮度调节、音量调节。",
   "author": "Naga系统控制模块",
   "agentType": "mcp",
   "entryPoint": {
@@ -20,13 +20,13 @@
     "invocationCommands": [
       {
         "command": "shutdown",
-        "description": "定时关机。使用Windows API显示原生关机对话框。\n- `tool_name`: 固定为 `shutdown`\n- `time`: 定时关机秒数（可选，默认0立即）\n- `force`: 是否强制关机（可选，默认false）\n- `message`: 关机消息（可选）\n**调用示例:**\n```json\n{\"tool_name\": \"shutdown\", \"time\": 60, \"message\": \"系统维护\"}```",
-        "example": "{\"tool_name\": \"shutdown\", \"time\": 60, \"message\": \"系统维护\"}"
+        "description": "定时关机。\n- `tool_name`: 固定为 `shutdown`\n- `time`: 定时关机秒数（可选，默认0立即）\n**调用示例:**\n```json\n{\"tool_name\": \"shutdown\", \"time\": 60}```",
+        "example": "{\"tool_name\": \"shutdown\", \"time\": 60}"
       },
       {
         "command": "restart",
-        "description": "定时重启。使用Windows API显示原生重启对话框。\n- `tool_name`: 固定为 `restart`\n- `time`: 定时重启秒数（可选，默认0立即）\n- `force`: 是否强制重启（可选，默认false）\n- `message`: 重启消息（可选）\n**调用示例:**\n```json\n{\"tool_name\": \"restart\", \"time\": 60, \"message\": \"系统更新\"}```",
-        "example": "{\"tool_name\": \"restart\", \"time\": 60, \"message\": \"系统更新\"}"
+        "description": "定时重启。\n- `tool_name`: 固定为 `restart`\n- `time`: 定时重启秒数（可选，默认0立即）\n**调用示例:**\n```json\n{\"tool_name\": \"restart\", \"time\": 60}```",
+        "example": "{\"tool_name\": \"restart\", \"time\": 60}"
       },
       {
         "command": "set_brightness",
@@ -37,28 +37,15 @@
         "command": "set_volume",
         "description": "设置系统音量。\n- `tool_name`: 固定为 `set_volume`\n- `value`: 音量值（0-100）\n**调用示例:**\n```json\n{\"tool_name\": \"set_volume\", \"value\": 50}```",
         "example": "{\"tool_name\": \"set_volume\", \"value\": 50}"
-      },
-      {
-        "command": "block_shutdown",
-        "description": "阻止关机。使用Windows API阻止系统关机，显示自定义原因。\n- `tool_name`: 固定为 `block_shutdown`\n- `reason`: 阻止关机的原因（可选，默认\"正在保存重要数据...\"）\n**调用示例:**\n```json\n{\"tool_name\": \"block_shutdown\", \"reason\": \"正在备份数据\"}```",
-        "example": "{\"tool_name\": \"block_shutdown\", \"reason\": \"正在备份数据\"}"
-      },
-      {
-        "command": "unblock_shutdown",
-        "description": "取消阻止关机。取消之前设置的关机阻止。\n- `tool_name`: 固定为 `unblock_shutdown`\n**调用示例:**\n```json\n{\"tool_name\": \"unblock_shutdown\"}```",
-        "example": "{\"tool_name\": \"unblock_shutdown\"}"
       }
     ]
   },
   "inputSchema": {
     "type": "object",
     "properties": {
-      "tool_name": {"type": "string", "description": "工具名称，如shutdown/restart/set_brightness/set_volume/block_shutdown/unblock_shutdown"},
+      "tool_name": {"type": "string", "description": "工具名称，如shutdown/restart/set_brightness/set_volume"},
       "time": {"type": "integer", "description": "定时关机或重启秒数（shutdown/restart时可选）"},
-      "value": {"type": "integer", "description": "亮度或音量值（0-100，set_brightness/set_volume时必需）"},
-      "force": {"type": "boolean", "description": "是否强制关机/重启（shutdown/restart时可选）"},
-      "message": {"type": "string", "description": "关机/重启消息（shutdown/restart时可选）"},
-      "reason": {"type": "string", "description": "阻止关机的原因（block_shutdown时可选）"}
+      "value": {"type": "integer", "description": "亮度或音量值（0-100，set_brightness/set_volume时必需）"}
     },
     "required": ["tool_name"]
   },

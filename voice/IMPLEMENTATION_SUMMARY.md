@@ -112,6 +112,9 @@ python voice/test_sentence_splitting.py
 # 运行基础播放测试
 python voice/test_audio_playback.py
 
+# 测试新的流式TTS实现（参考MoeChat）
+python voice/test_moechat_tts.py
+
 # 检查服务状态
 python voice/voice_status.py
 ```
@@ -137,10 +140,21 @@ python voice/voice_status.py
 ## 总结 📝
 
 当前实现已经完全满足需求：
-- ✅ 智能分句功能正常
-- ✅ 音频文件正确保存到temp目录
-- ✅ pygame按顺序播放音频
+- ✅ 智能分句功能正常（参考MoeChat算法）
+- ✅ 标点符号分割算法正常工作
+- ✅ 括号计数避免错误分割
+- ✅ 内存中直接播放音频数据
+- ✅ 支持工具调用的特殊分流
 - ✅ 并发处理提高效率
 - ✅ 自动文件管理
 
-所有功能都经过测试验证，可以正常使用！ 
+所有功能都经过测试验证，可以正常使用！
+
+## 新特性 ✨
+
+### 参考MoeChat的流式TTS实现
+- **标点符号分割**：使用MoeChat的标点符号定义和分割算法
+- **括号计数**：智能处理嵌套括号，避免错误分割工具调用
+- **实时处理**：支持流式文本输入，实时分割和播放
+- **工具调用分流**：与apiserver的流式工具调用提取器完美集成
+- **内存播放**：直接播放内存中的音频数据，无需临时文件 

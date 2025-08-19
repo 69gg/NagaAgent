@@ -113,7 +113,7 @@ class DeviceSwitchManager:
         if mqtt_config['username'] or mqtt_config['password']:
             self.client.username_pw_set(mqtt_config['username'], mqtt_config['password'])
 
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client, userdata, flags, rc, properties=None, *args):
         if rc == 0:
             self.connected = True
             self.reconnect_attempt = 0
@@ -127,7 +127,7 @@ class DeviceSwitchManager:
             if self.reconnect_enabled:
                 self._start_reconnect()
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, rc, reasonCode=None, properties=None, *args):
         """断开连接回调"""
         self.connected = False
         logger.warning(f"MQTT连接断开，错误代码: {rc}")
@@ -135,7 +135,7 @@ class DeviceSwitchManager:
         if rc != 0 and self.reconnect_enabled:
             self._start_reconnect()
 
-    def _on_message(self, client, userdata, msg):
+    def _on_message(self, client, userdata, msg, *args):
         """接收设备状态反馈"""
         try:
             if isinstance(msg.payload, bytes):

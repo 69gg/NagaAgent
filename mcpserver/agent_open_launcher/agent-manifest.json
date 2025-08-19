@@ -1,8 +1,8 @@
 {
   "name": "AppLauncherAgent",
-  "displayName": "智能应用启动Agent",
-  "version": "1.0.0",
-  "description": "支持启动电脑应用：打开应用、列出应用、刷新应用列表。",
+  "displayName": "智能应用启动Agent（综合版）",
+  "version": "2.2.0",
+  "description": "支持从Windows注册表和快捷方式扫描应用并启动：智能获取应用列表并启动指定应用，优先使用快捷方式启动。",
   "author": "Naga应用操作模块",
   "agentType": "mcp",
   "entryPoint": {
@@ -22,29 +22,28 @@
     "invocationCommands": [
       {
         "command": "open",
-        "description": "启动指定应用。\n- `tool_name`: 固定为 `open`\n- `app`: 应用名称或路径\n- `args`: 启动参数（可选）\n**调用示例:**\n```json\n{\"tool_name\": \"open\", \"app\": \"notepad\"}```",
+        "description": "智能应用启动工具。\n- `tool_name`: 固定为 `open`\n- `app`: 应用名称（可选，如果不提供则返回应用列表）\n- `args`: 启动参数（可选）\n**使用方式1 - 获取应用列表:**\n```json\n{\"tool_name\": \"open\"}```\n**使用方式2 - 启动指定应用:**\n```json\n{\"tool_name\": \"open\", \"app\": \"notepad\"}```\n**注意:** 如果不提供app参数，会返回可用应用列表供选择；如果提供app参数，会尝试启动指定应用。支持注册表和快捷方式两种来源，优先使用快捷方式启动。",
         "example": "{\"tool_name\": \"open\", \"app\": \"notepad\"}"
-      },
-      {
-        "command": "list",
-        "description": "列出所有可用应用。\n- `tool_name`: 固定为 `list`\n**调用示例:**\n```json\n{\"tool_name\": \"list\"}```",
-        "example": "{\"tool_name\": \"list\"}"
-      },
-      {
-        "command": "refresh",
-        "description": "刷新应用列表缓存。\n- `tool_name`: 固定为 `refresh`\n**调用示例:**\n```json\n{\"tool_name\": \"refresh\"}```",
-        "example": "{\"tool_name\": \"refresh\"}"
       }
     ]
   },
   "inputSchema": {
     "type": "object",
     "properties": {
-      "tool_name": {"type": "string", "description": "工具名称：open/list/refresh"},
-      "app": {"type": "string", "description": "应用名称或路径（open时必需）"},
-      "args": {"type": "string", "description": "启动参数（open时可选）"}
+      "tool_name": {"type": "string", "description": "工具名称：open"},
+      "app": {"type": "string", "description": "应用名称（可选，不提供则返回应用列表）"},
+      "args": {"type": "string", "description": "启动参数（可选）"}
     },
     "required": ["tool_name"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "success": {"type": "boolean", "description": "操作是否成功"},
+      "status": {"type": "string", "description": "状态码"},
+      "message": {"type": "string", "description": "状态消息"},
+      "data": {"type": "object", "description": "返回数据"}
+    }
   },
   "configSchema": {
     "APP_LAUNCHER_AGENT_CACHE_SIZE": "integer"

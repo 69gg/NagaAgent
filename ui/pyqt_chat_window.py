@@ -445,20 +445,37 @@ class ChatWindow(QWidget):
                 s.on_send();return True
         return False
     def add_user_message(s, name, content):
-        # 先把\n转成\n，再把\n转成<br>，适配所有换行
+        """添加用户消息"""
         from ui.response_utils import extract_message
         msg = extract_message(content)
         content_html = str(msg).replace('\\n', '\n').replace('\n', '<br>')
         
-        # 添加消息到UI
-        s.text.append(f"<span style='color:#fff;font-size:12pt;font-family:Lucida Console;'>{name}</span>")
-        s.text.append(f"<span style='color:#fff;font-size:16pt;font-family:Lucida Console;'>{content_html}</span>")
+        # 生成消息ID
+        if not hasattr(s, '_message_counter'):
+            s._message_counter = 0
+        s._message_counter += 1
+        message_id = f"msg_{s._message_counter}"
+        
+        # 初始化消息存储
+        if not hasattr(s, '_messages'):
+            s._messages = {}
+        
+        # 存储消息信息
+        s._messages[message_id] = {
+            'name': name,
+            'content': content_html,
+            'full_content': content,
+            'position': len(s.text.toPlainText())
+        }
+        
+        # 添加消息到UI - 用户名和内容之间只有一个换行，消息之间不需要额外间隔
+        s.text.append(f"<span style='color:#fff;font-size:12pt;font-family:Lucida Console;'>{name}</span><br>")
+        s.text.append(f"<span style='color:#fff;font-size:16pt;font-family:Lucida Console;'>{content_html}</span><br>")
         
         # 滚动到底部
         s.text.verticalScrollBar().setValue(s.text.verticalScrollBar().maximum())
         
-        # 返回消息的起始位置，用于后续更新
-        return len(s.text.toPlainText())
+        return message_id
     
     def update_last_message(s, name, content):
         """更新最后一条消息的内容"""
@@ -466,22 +483,36 @@ class ChatWindow(QWidget):
         msg = extract_message(content)
         content_html = str(msg).replace('\\n', '\n').replace('\n', '<br>')
         
-        # 获取当前文本内容
-        current_text = s.text.toHtml()
+        # 检查是否有当前消息ID
+        if hasattr(s, '_current_message_id') and s._current_message_id:
+            # 更新存储的消息信息
+            if hasattr(s, '_messages') and s._current_message_id in s._messages:
+                s._messages[s._current_message_id]['content'] = content_html
+                s._messages[s._current_message_id]['full_content'] = content
+            
+            # 重新构建整个聊天界面
+            s._rebuild_chat_display()
+        else:
+            # 如果没有当前消息ID，直接添加新消息
+            s.add_user_message(name, content)
+    
+    def _rebuild_chat_display(self):
+        """重新构建聊天显示"""
+        # 清空当前显示
+        self.text.clear()
         
-        # 查找最后一个消息块并替换
-        lines = current_text.split('\n')
-        if len(lines) >= 2:
-            # 替换最后两个元素（名字和内容）
-            lines[-2] = f"<span style='color:#fff;font-size:12pt;font-family:Lucida Console;'>{name}</span>"
-            lines[-1] = f"<span style='color:#fff;font-size:16pt;font-family:Lucida Console;'>{content_html}</span>"
-            
-            # 重新组合HTML
-            updated_html = '\n'.join(lines)
-            s.text.setHtml(updated_html)
-            
-            # 滚动到底部
-            s.text.verticalScrollBar().setValue(s.text.verticalScrollBar().maximum())
+        # 重新添加所有消息
+        if hasattr(self, '_messages'):
+            for message_id, message_info in self._messages.items():
+                name = message_info['name']
+                content = message_info['content']
+                
+                # 添加消息到UI - 用户名和内容之间只有一个换行，消息之间不需要额外间隔
+                self.text.append(f"<span style='color:#fff;font-size:12pt;font-family:Lucida Console;'>{name}</span><br>")
+                self.text.append(f"<span style='color:#fff;font-size:16pt;font-family:Lucida Console;'>{content}</span><br>")
+        
+        # 滚动到底部
+        self.text.verticalScrollBar().setValue(self.text.verticalScrollBar().maximum())
     def on_send(s):
         u = s.input.toPlainText().strip()
         if u:
@@ -525,6 +556,10 @@ class ChatWindow(QWidget):
         s.worker.stream_chunk.connect(s.append_response_chunk)
         s.worker.stream_complete.connect(s.finalize_streaming_response)
         s.worker.finished.connect(s.on_response_finished)
+        
+        # 工具调用相关信号
+        s.worker.tool_call_detected.connect(s.handle_tool_call)
+        s.worker.tool_result_received.connect(s.handle_tool_result)
     
     def setup_batch_worker(s):
         """配置批量Worker的信号连接"""
@@ -535,14 +570,14 @@ class ChatWindow(QWidget):
     
     def append_response_chunk(s, chunk):
         """追加响应片段（流式模式）- 实时显示"""
-        s.current_response += chunk
-        
         # 实时更新显示 - 立即显示到UI
         if not hasattr(s, '_current_message_id'):
             # 第一次收到chunk时，创建新消息
             s._current_message_id = s.add_user_message("娜迦", chunk)
+            s.current_response = chunk
         else:
-            # 后续chunk，更新现有消息 - 立即更新
+            # 后续chunk，追加到当前消息
+            s.current_response += chunk
             s.update_last_message("娜迦", s.current_response)
             
         # 强制UI更新
@@ -590,6 +625,18 @@ class ChatWindow(QWidget):
         """处理错误"""
         s.add_user_message("系统", f"❌ {error_msg}")
         s.progress_widget.stop_loading()
+    
+    def handle_tool_call(s, notification):
+        """处理工具调用通知"""
+        # 在状态栏显示工具调用状态
+        s.progress_widget.status_label.setText(f"🔧 {notification}")
+        print(f"工具调用: {notification}")
+    
+    def handle_tool_result(s, result):
+        """处理工具执行结果"""
+        # 在状态栏显示工具执行结果
+        s.progress_widget.status_label.setText(f"✅ {result[:50]}...")
+        print(f"工具结果: {result}")
     
     def cancel_current_task(s):
         """取消当前任务 - 优化版本，减少卡顿"""
