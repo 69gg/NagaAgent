@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
+ENCF = 0
 
 def setup_environment():
     """设置环境变量解决各种兼容性问题"""
@@ -532,21 +533,41 @@ class NagaConfig(BaseModel):
 def load_config():
     """加载配置"""
     config_path = "config.json"
+    
+    # 设置环境变量（只需设置一次）
+    setup_environment()
+    
     if os.path.exists(config_path):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
-            # 设置环境变量
-            setup_environment()
             return NagaConfig(**config_data)
         except Exception as e:
-            print(f"警告：加载 {config_path} 失败: {e}")
-            print("使用默认配置")
+            if ENCF > 1:
+                print(f"警告：加载 {config_path} 失败: {e}")
+                print("使用默认配置")
+                return NagaConfig()
+            
+            ENCF += 1
+            try:
+                # 尝试修复编码问题
+                with open(config_path, 'r', encoding='ISO-8859-1') as f:
+                    con = f.read()
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    f.write(con)
+                print("已经修复编码")
+                
+                # 重新尝试加载配置
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+                return NagaConfig(**config_data)
+            except Exception as e2:
+                print(f"警告：加载 {config_path} 失败: {e2}")
+                print("使用默认配置")
+                return NagaConfig()
     else:
         print(f"警告：配置文件 {config_path} 不存在，使用默认配置")
     
-    # 设置环境变量并返回默认配置
-    setup_environment()
     return NagaConfig()
 
 config = load_config()
