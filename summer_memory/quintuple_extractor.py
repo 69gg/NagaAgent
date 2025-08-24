@@ -73,6 +73,34 @@ async def _extract_quintuples_async_structured(text):
         logger.info(f"尝试使用结构化输出提取五元组 (第{attempt + 1}次)")
 
         try:
+            # Deepseek适配
+            if config.api.model.startswith("deepseek"):
+                print("检测到Deepseek模型，尝试使用json mode")
+                completion = await async_client.chat.completions.create(
+                    model=config.api.model,
+                    messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"请从以下文本中提取五元组：\n\n{text}"}
+                ],
+                    response_format={
+                    'type': 'json_object'
+                },
+                timeout=600 + (attempt * 20)
+                )
+                result = completion.choices[0].message.content
+                result_data = json.loads(result)
+                quintuples = []
+
+                for q in result_data.get("quintuples", []):
+                    quintuples.append((
+                        q.get("subject", ""), q.get("subject_type", ""),
+                        q.get("predicate", ""), q.get("object", ""), q.get("object_type", "")
+                    ))
+
+                logger.info(f"Deepseek 结构化输出成功，提取到 {len(quintuples)} 个五元组")
+                return quintuples
+
+
             # 尝试使用结构化输出
             completion = await async_client.beta.chat.completions.parse(
                 model=config.api.model,
@@ -89,13 +117,13 @@ async def _extract_quintuples_async_structured(text):
             # 解析结果
             result = completion.choices[0].message.parsed
             quintuples = []
-            
+
             for q in result.quintuples:
                 quintuples.append((
-                    q.subject, q.subject_type, 
+                    q.subject, q.subject_type,
                     q.predicate, q.object, q.object_type
                 ))
-            
+
             logger.info(f"结构化输出成功，提取到 {len(quintuples)} 个五元组")
             return quintuples
 
@@ -138,9 +166,9 @@ async def _extract_quintuples_async_fallback(text):
                 temperature=0.3,
                 timeout=600 + (attempt * 20)
             )
-            
+
             content = response.choices[0].message.content.strip()
-            
+
             # 尝试解析JSON
             try:
                 quintuples = json.loads(content)
@@ -194,6 +222,33 @@ def _extract_quintuples_structured(text):
         logger.info(f"尝试使用结构化输出提取五元组 (第{attempt + 1}次)")
 
         try:
+            # Deepseek适配
+            if config.api.model.startswith("deepseek"):
+                print("检测到Deepseek模型，尝试使用json mode")
+                completion = client.chat.completions.create(
+                    model=config.api.model,
+                    messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"请从以下文本中提取五元组：\n\n{text}"}
+                ],
+                    response_format={
+                    'type': 'json_object'
+                },
+                timeout=600 + (attempt * 20)
+                )
+                result = completion.choices[0].message.content
+                result_data = json.loads(result)
+                quintuples = []
+
+                for q in result_data.get("quintuples", []):
+                    quintuples.append((
+                        q.get("subject", ""), q.get("subject_type", ""),
+                        q.get("predicate", ""), q.get("object", ""), q.get("object_type", "")
+                    ))
+
+                logger.info(f"Deepseek 结构化输出成功，提取到 {len(quintuples)} 个五元组")
+                return quintuples
+                
             # 尝试使用结构化输出
             completion = client.beta.chat.completions.parse(
                 model=config.api.model,
@@ -210,13 +265,13 @@ def _extract_quintuples_structured(text):
             # 解析结果
             result = completion.choices[0].message.parsed
             quintuples = []
-            
+
             for q in result.quintuples:
                 quintuples.append((
-                    q.subject, q.subject_type, 
+                    q.subject, q.subject_type,
                     q.predicate, q.object, q.object_type
                 ))
-            
+
             logger.info(f"结构化输出成功，提取到 {len(quintuples)} 个五元组")
             return quintuples
 
@@ -261,7 +316,7 @@ def _extract_quintuples_fallback(text):
             )
 
             content = response.choices[0].message.content.strip()
-            
+
             # 尝试解析JSON
             try:
                 quintuples = json.loads(content)
