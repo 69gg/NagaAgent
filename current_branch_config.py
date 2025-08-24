@@ -67,7 +67,7 @@ class APIConfig(BaseModel):
     base_url: str = Field(default="https://api.deepseek.com/v1", description="API基础URL")
     model: str = Field(default="deepseek-chat", description="使用的模型名称")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="温度参数")
-    max_tokens: int = Field(default=2000, ge=1, le=8192, description="最大token数")
+    max_tokens: int = Field(default=2000, ge=1, le=1000000, description="最大token数")
     max_history_rounds: int = Field(default=10, ge=1, le=100, description="最大历史轮数")
     # 额外可选参数
     top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Top-p采样参数")

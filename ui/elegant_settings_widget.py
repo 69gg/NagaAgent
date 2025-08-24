@@ -365,7 +365,7 @@ class ElegantSettingsWidget(QWidget):
         # Max Tokens
         if hasattr(config.api, "max_tokens"):
             max_tokens_spin = QSpinBox()
-            max_tokens_spin.setRange(100, 8000)
+            max_tokens_spin.setRange(100, 1000000)
             max_tokens_spin.setValue(config.api.max_tokens)
             max_tokens_spin.setStyleSheet(self.get_spin_style() + "color: #fff;")
             max_tokens_card = SettingCard("最大Token数", "单次对话的最大长度限制", max_tokens_spin, "api.max_tokens")
