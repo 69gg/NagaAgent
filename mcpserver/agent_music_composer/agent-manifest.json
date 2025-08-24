@@ -1,0 +1,69 @@
+{
+  "name": "音乐编排",
+  "displayName": "音乐编排",
+  "version": "1.0.0",
+  "description": "支持根据频率列表和时长列表生成音乐曲谱，支持多种音频格式输出。",
+  "author": "pyl(1708213363@qq.com)",
+  "agentType": "mcp",
+  "entryPoint": {
+    "module": "mcpserver.agent_music_composer.agent_music_composer",
+    "class": "MusicComposerAgent"
+  },
+  "factory": {
+    "create_instance": "create_music_composer_agent"
+  },
+  "communication": {
+    "protocol": "stdio",
+    "timeout": 30000
+  },
+  "capabilities": {
+    "invocationCommands": [
+      {
+        "command": "生成曲谱",
+        "description": "根据频率列表(Hz)和时长列表(s)生成音乐曲谱；参数：frequencies（频率列表，必需），durations（时长列表，必需），output_format（输出格式，可选：wav/mp3/ogg，默认wav），sample_rate（采样率，可选，默认44100）",
+        "example": "{\"tool_name\":\"生成曲谱\",\"frequencies\":[440,523.25,659.25],\"durations\":[0.5,0.5,0.5],\"output_format\":\"wav\"}"
+      },
+      {
+        "command": "音符转换",
+        "description": "将音符名称转换为频率；参数：notes（音符列表，必需），octave（八度，可选，默认4）",
+        "example": "{\"tool_name\":\"音符转换\",\"notes\":[\"C\",\"D\",\"E\"],\"octave\":4}"
+      },
+      {
+        "command": "生成和弦",
+        "description": "生成指定和弦的频率组合；参数：chord_type（和弦类型，必需），root_note（根音，可选，默认C），octave（八度，可选，默认4），duration（时长，可选，默认1.0）",
+        "example": "{\"tool_name\":\"生成和弦\",\"chord_type\":\"major\",\"root_note\":\"C\",\"octave\":4,\"duration\":2.0}"
+      }
+    ]
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tool_name": {"type": "string", "description": "工具名称：生成曲谱/音符转换/生成和弦"},
+      "frequencies": {"type": "array", "items": {"type": "number"}, "description": "频率列表(Hz)，生成曲谱时必需"},
+      "durations": {"type": "array", "items": {"type": "number"}, "description": "时长列表(s)，生成曲谱时必需"},
+      "output_format": {"type": "string", "enum": ["wav", "mp3", "ogg"], "description": "输出格式，可选：wav/mp3/ogg，默认wav"},
+      "sample_rate": {"type": "integer", "description": "采样率，可选，默认44100"},
+      "notes": {"type": "array", "items": {"type": "string"}, "description": "音符列表，音符转换时必需"},
+      "octave": {"type": "integer", "description": "八度，可选，默认4"},
+      "chord_type": {"type": "string", "enum": ["major", "minor", "diminished", "augmented", "major7", "minor7"], "description": "和弦类型，生成和平时必需"},
+      "root_note": {"type": "string", "description": "根音，可选，默认C"},
+      "duration": {"type": "number", "description": "时长，可选，默认1.0"}
+    },
+    "required": ["tool_name"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {"type": "string", "description": "状态：ok/error"},
+      "message": {"type": "string", "description": "消息描述"},
+      "data": {"type": "string", "description": "结果内容，音频文件路径或频率数据"},
+      "file_path": {"type": "string", "description": "生成的音频文件路径"}
+    }
+  },
+  "runtime": {
+    "instance": null,
+    "is_initialized": false,
+    "last_used": null,
+    "usage_count": 0
+  }
+}

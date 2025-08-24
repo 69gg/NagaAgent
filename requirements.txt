@@ -96,3 +96,4 @@ crawl4ai
 langchain_community
 langchain
 
+pydub
