@@ -57,13 +57,42 @@ async def _extract_quintuples_async_structured(text):
 
 类型包括但不限于：人物、地点、组织、物品、概念、时间、事件、活动等。
 
+请严格按照以下JSON格式返回结果：
+{
+  "quintuples": [
+    {
+      "subject": "主体文本",
+      "subject_type": "主体类型",
+      "predicate": "动作",
+      "object": "客体文本",
+      "object_type": "客体类型"
+    }
+  ]
+}
+
 例如：
 输入：小明在公园里踢足球。
-应该提取出：
-- 主体：小明，类型：人物，动作：踢，客体：足球，类型：物品
-- 主体：小明，类型：人物，动作：在，客体：公园，类型：地点
+输出：
+{
+  "quintuples": [
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "踢",
+      "object": "足球",
+      "object_type": "物品"
+    },
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "在",
+      "object": "公园",
+      "object_type": "地点"
+    }
+  ]
+}
 
-请仔细分析文本，提取所有可以识别出的五元组关系。
+请仔细分析文本，提取所有可以识别出的五元组关系，并严格按照上述JSON格式返回。
 """
 
     # 重试机制配置
@@ -88,7 +117,13 @@ async def _extract_quintuples_async_structured(text):
                 timeout=600 + (attempt * 20)
                 )
                 result = completion.choices[0].message.content
-                result_data = json.loads(result)
+                try:
+                    result_data = json.loads(result)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                    logger.error(f"原始内容: {result[:500]}")
+                    raise
+                
                 quintuples = []
 
                 for q in result_data.get("quintuples", []):
@@ -206,13 +241,42 @@ def _extract_quintuples_structured(text):
 
 类型包括但不限于：人物、地点、组织、物品、概念、时间、事件、活动等。
 
+请严格按照以下JSON格式返回结果：
+{
+  "quintuples": [
+    {
+      "subject": "主体文本",
+      "subject_type": "主体类型",
+      "predicate": "动作",
+      "object": "客体文本",
+      "object_type": "客体类型"
+    }
+  ]
+}
+
 例如：
 输入：小明在公园里踢足球。
-应该提取出：
-- 主体：小明，类型：人物，动作：踢，客体：足球，类型：物品
-- 主体：小明，类型：人物，动作：在，客体：公园，类型：地点
+输出：
+{
+  "quintuples": [
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "踢",
+      "object": "足球",
+      "object_type": "物品"
+    },
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "在",
+      "object": "公园",
+      "object_type": "地点"
+    }
+  ]
+}
 
-请仔细分析文本，提取所有可以识别出的五元组关系。
+请仔细分析文本，提取所有可以识别出的五元组关系，并严格按照上述JSON格式返回。
 """
 
     # 重试机制配置
@@ -237,7 +301,13 @@ def _extract_quintuples_structured(text):
                 timeout=600 + (attempt * 20)
                 )
                 result = completion.choices[0].message.content
-                result_data = json.loads(result)
+                try:
+                    result_data = json.loads(result)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                    logger.error(f"原始内容: {result[:500]}")
+                    raise
+                
                 quintuples = []
 
                 for q in result_data.get("quintuples", []):
