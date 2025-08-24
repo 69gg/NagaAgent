@@ -79,7 +79,7 @@ async def _extract_quintuples_async_structured(text):
                 completion = await async_client.chat.completions.create(
                     model=config.api.model,
                     messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": system_prompt+"请以json格式输出"},
                     {"role": "user", "content": f"请从以下文本中提取五元组：\n\n{text}"}
                 ],
                     response_format={
@@ -228,7 +228,7 @@ def _extract_quintuples_structured(text):
                 completion = client.chat.completions.create(
                     model=config.api.model,
                     messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": system_prompt+"请以json格式输出"},
                     {"role": "user", "content": f"请从以下文本中提取五元组：\n\n{text}"}
                 ],
                     response_format={
