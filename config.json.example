@@ -9,7 +9,7 @@
   },
   "api": {
     "api_key": " ",
-    "base_url": "https://phapi.furina.junmatec.cn/v1",
+    "base_url": "https://naga.furina.chat/v1",
     "model": " ",
     "temperature": 0.7,
     "max_tokens": 2000,
