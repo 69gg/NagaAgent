@@ -695,23 +695,15 @@ class NagaConversation: # 对话主类
                 self.messages += [{"role": "user", "content": u}, {"role": "assistant", "content": display_text}]
                 self.save_log(u, display_text)
                 
-                # 智能记忆存储流程（开发者模式不写入）
+                # 智能记忆存储流程（开发者模式不写入，后台异步执行）
                 if self.memory_manager and not self.dev_mode:
                     try:
-                        print(f"开始智能记忆存储：{now()}")
-                        # 使用智能记忆存储
-                        store_success = await self.memory_manager.store_memory_intelligent(u, display_text)
-                        if store_success:
-                            print(f"智能记忆存储成功")
-                        else:
-                            print(f"智能记忆存储：决策不存储或存储失败")
+                        print(f"启动后台智能记忆存储：{now()}")
+                        # 使用后台智能记忆存储，不阻塞主流程
+                        await self.memory_manager.store_memory_intelligent_background(u, display_text)
+                        print(f"后台记忆存储任务已启动")
                     except Exception as e:
-                        logger.error(f"智能记忆存储失败: {e}")
-                        # 回退到传统存储方法
-                        try:
-                            await self.memory_manager.add_conversation_memory(u, display_text)
-                        except Exception as e2:
-                            logger.error(f"回退记忆存储也失败: {e2}")
+                        logger.error(f"启动后台记忆存储失败: {e}")
                 
                 # 禁用异步思考判断结果检查
                 # if thinking_task and not thinking_task.done():
