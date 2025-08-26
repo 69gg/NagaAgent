@@ -95,4 +95,4 @@ mqtt-tool>=0.1.1
 crawl4ai
 langchain_community
 langchain
-
+py2neo

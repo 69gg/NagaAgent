@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable
 from pydantic import BaseModel, Field, field_validator
+from time import sleep
 
 # 配置变更监听器
 _config_listeners: List[Callable] = []
@@ -28,6 +29,25 @@ def notify_config_changed():
             listener()
         except Exception as e:
             print(f"配置监听器执行失败: {e}")
+
+def test_neo4j_connection(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_database: str) -> bool:
+    """测试 Neo4j 连接是否正常"""
+    try:
+        from py2neo import Graph
+        # 尝试连接 Neo4j
+        graph = Graph(neo4j_uri, auth=(neo4j_user, neo4j_password), name=neo4j_database)
+        # 执行简单查询测试
+        result = graph.run("RETURN 1 as test").data()
+        if result and result[0].get('test') == 1:
+            print("[Config] Neo4j 连接测试成功")
+            return True
+        return False
+    except ImportError:
+        print("[Config] 警告: py2neo 未安装，无法测试 Neo4j 连接")
+        return False
+    except Exception as e:
+        print(f"[Config] Neo4j 连接测试失败: {e}")
+        return False
 
 def setup_environment():
     """设置环境变量解决兼容性问题"""
@@ -610,7 +630,27 @@ def load_config():
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
-            return NagaConfig(**config_data)
+            
+            # 创建配置实例
+            config_instance = NagaConfig(**config_data)
+            
+            # 测试 Neo4j 连接
+            if config_instance.grag.enabled:
+                print("[Config] 检测到 GRAG 已启用，正在测试 Neo4j 连接...")
+                if not test_neo4j_connection(
+                    config_instance.grag.neo4j_uri,
+                    config_instance.grag.neo4j_user,
+                    config_instance.grag.neo4j_password,
+                    config_instance.grag.neo4j_database
+                ):
+                    print("[Config] Neo4j 连接失败，禁用 GRAG 相关功能")
+                    # 直接修改配置实例，不写入文件
+                    config_instance.grag.enabled = False
+                    config_instance.grag.auto_extract = False
+                    config_instance.grag.memory_decision_enabled = False
+                    config_instance.grag.intelligent_memory_enabled = False
+            
+            return config_instance
         except Exception as e:
             print(f"警告：加载 {config_path} 失败: {e}")
             print("使用默认配置")
@@ -632,7 +672,25 @@ def load_config():
                 # 重新尝试加载配置
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)
-                return NagaConfig(**config_data)
+                
+                # 创建配置实例并测试 Neo4j 连接
+                config_instance = NagaConfig(**config_data)
+                if config_instance.grag.enabled:
+                    print("[Config] 检测到 GRAG 已启用，正在测试 Neo4j 连接...")
+                    if not test_neo4j_connection(
+                        config_instance.grag.neo4j_uri,
+                        config_instance.grag.neo4j_user,
+                        config_instance.grag.neo4j_password,
+                        config_instance.grag.neo4j_database
+                    ):
+                        print("[Config] Neo4j 连接失败，禁用 GRAG 相关功能")
+                        # 直接修改配置实例，不写入文件
+                        config_instance.grag.enabled = False
+                        config_instance.grag.auto_extract = False
+                        config_instance.grag.memory_decision_enabled = False
+                        config_instance.grag.intelligent_memory_enabled = False
+                
+                return config_instance
             except Exception as e2:
                 print(f"警告：加载 {config_path} 失败: {e2}")
                 print("使用默认配置")

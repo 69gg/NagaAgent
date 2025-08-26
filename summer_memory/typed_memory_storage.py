@@ -131,7 +131,33 @@ class TypedMemoryStorage:
         current_time = time.time()
         cutoff_time = current_time - (retention_days * 24 * 3600)
         
-        return [m for m in memories if m.get("timestamp", current_time) >= cutoff_time]
+        # 处理timestamp字段可能是字符串或数字的情况
+        filtered_memories = []
+        for m in memories:
+            timestamp = m.get("timestamp")
+            if timestamp is None:
+                timestamp = current_time
+            elif isinstance(timestamp, str):
+                # 尝试解析字符串格式的时间戳
+                try:
+                    # 如果是格式化的时间字符串，使用timestamp_raw字段
+                    if "timestamp_raw" in m:
+                        timestamp = m["timestamp_raw"]
+                    else:
+                        timestamp = current_time
+                except:
+                    timestamp = current_time
+            
+            # 确保timestamp是数字类型
+            try:
+                timestamp = float(timestamp)
+            except (ValueError, TypeError):
+                timestamp = current_time
+            
+            if timestamp >= cutoff_time:
+                filtered_memories.append(m)
+        
+        return filtered_memories
     
     def _apply_size_limit(self, memories: List[Dict[str, Any]], max_size: int) -> List[Dict[str, Any]]:
         """应用大小限制"""
@@ -309,10 +335,36 @@ class TypedMemoryStorage:
         current_time = time.time()
         cutoff_time = current_time - (hours * 3600)
         
-        recent_memories = [m for m in memories if m.get("timestamp", current_time) >= cutoff_time]
+        # 处理timestamp字段可能是字符串或数字的情况
+        recent_memories = []
+        for m in memories:
+            timestamp = m.get("timestamp")
+            if timestamp is None:
+                timestamp = current_time
+            elif isinstance(timestamp, str):
+                # 尝试解析字符串格式的时间戳
+                try:
+                    # 如果是格式化的时间字符串，使用timestamp_raw字段
+                    if "timestamp_raw" in m:
+                        timestamp = m["timestamp_raw"]
+                    else:
+                        timestamp = current_time
+                except:
+                    timestamp = current_time
+            
+            # 确保timestamp是数字类型
+            try:
+                timestamp = float(timestamp)
+            except (ValueError, TypeError):
+                timestamp = current_time
+            
+            if timestamp >= cutoff_time:
+                recent_memories.append(m)
         
-        # 按时间戳排序
-        return sorted(recent_memories, key=lambda x: x.get("timestamp", 0), reverse=True)
+        # 按时间戳排序（使用timestamp_raw字段如果存在）
+        return sorted(recent_memories, 
+                     key=lambda x: x.get("timestamp_raw", x.get("timestamp", current_time)), 
+                     reverse=True)
     
     def get_memories_by_session(self, session_id: str, 
                                memory_types: Optional[List[MemoryType]] = None) -> List[Dict[str, Any]]:

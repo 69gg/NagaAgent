@@ -41,7 +41,22 @@
     "neo4j_database": "neo4j",
     "extraction_timeout": 12,
     "extraction_retries": 2,
-    "base_timeout": 15
+    "base_timeout": 15,
+	"intelligent_query": {
+      "enabled": true,
+      "analysis_timeout": 30,
+      "query_timeout": 60,
+      "max_results": 20,
+      "confidence_threshold": 0.7,
+      "cache_enabled": true,
+      "cache_ttl": 3600,
+      "response_style": "conversational",
+      "include_citations": true,
+      "max_response_length": 2000,
+      "learning_enabled": true,
+      "interest_tracking": true,
+      "pattern_recognition": true
+    }
   },
   "handoff": {
     "max_loop_stream": 5,
