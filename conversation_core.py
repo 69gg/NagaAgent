@@ -508,9 +508,28 @@ class NagaConversation: # 对话主类
             # 只在语音输入时显示处理提示
             if is_voice_input:
                 print(f"开始处理用户输入：{now()}")  # 语音转文本结束，开始处理
-                     
-            # 添加handoff提示词
-            system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt}"
+            
+            # 智能记忆查询流程
+            memory_context = ""
+            if self.memory_manager and getattr(config.grag, 'intelligent_memory_enabled', True):
+                try:
+                    print(f"开始智能记忆查询：{now()}")
+                    memory_context = await self.memory_manager.query_memory_intelligent(u)
+                    if memory_context:
+                        print(f"记忆查询成功，找到相关信息")
+                    else:
+                        print(f"记忆查询：未找到相关信息")
+                except Exception as e:
+                    logger.error(f"智能记忆查询失败: {e}")
+                    memory_context = ""
+            
+            # 构建增强的系统提示词
+            if memory_context:
+                # 使用记忆上下文模板
+                memory_enhanced_prompt = config.prompts.memory_context_prompt.format(memory_context=memory_context)
+                system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{memory_enhanced_prompt}\n\n{config.prompts.naga_system_prompt}"
+            else:
+                system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt}"
             
             # 获取过滤后的服务列表
             available_services = self.mcp.get_available_services_filtered()
@@ -676,13 +695,19 @@ class NagaConversation: # 对话主类
                 self.messages += [{"role": "user", "content": u}, {"role": "assistant", "content": display_text}]
                 self.save_log(u, display_text)
                 
-                # GRAG记忆存储（开发者模式不写入）- 使用前端显示的纯文本
+                # 智能记忆存储流程（开发者模式不写入，使用同步方式确保可靠性）
                 if self.memory_manager and not self.dev_mode:
                     try:
-                        # 使用前端显示的纯文本进行五元组提取
-                        await self.memory_manager.add_conversation_memory(u, display_text)
+                        print(f"启动智能记忆存储：{now()}")
+                        # 使用同步方式确保记忆存储可靠工作
+                        store_success = await self.memory_manager.store_memory_intelligent(u, display_text)
+                        if store_success:
+                            print(f"智能记忆存储完成：{len(u)}字用户输入 + {len(display_text)}字AI回复")
+                        else:
+                            print(f"智能记忆存储跳过：决策结果为不存储")
                     except Exception as e:
-                        logger.error(f"GRAG记忆存储失败: {e}")
+                        logger.error(f"智能记忆存储失败: {e}")
+                        print(f"智能记忆存储失败：{e}")
                 
                 # 禁用异步思考判断结果检查
                 # if thinking_task and not thinking_task.done():
@@ -730,6 +755,18 @@ class NagaConversation: # 对话主类
             traceback.print_exc(file=sys.stderr)
             yield ("娜迦", f"[MCP异常]: {e}")
             return
+
+    async def _background_memory_storage(self, user_question: str, ai_response: str) -> None:
+        """改进的后台记忆存储方法，使用主事件循环"""
+        try:
+            store_success = await self.memory_manager.store_memory_intelligent(user_question, ai_response)
+            if store_success:
+                print(f"后台记忆存储完成：{len(user_question)}字用户输入 + {len(ai_response)}字AI回复")
+            else:
+                print(f"后台记忆存储完成：决策跳过存储")
+        except Exception as e:
+            logger.error(f"后台记忆存储任务失败: {e}")
+            print(f"后台记忆存储失败：{e}")
 
     async def get_response(self, prompt: str, temperature: float = 0.7) -> str:
         """为树状思考系统等提供API调用接口""" # 统一接口

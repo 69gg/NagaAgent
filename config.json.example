@@ -9,10 +9,18 @@
   },
   "api": {
     "api_key": " ",
-    "base_url": "https://phapi.furina.junmatec.cn/v1",
+    "base_url": "https://naga.furina.chat/v1",
     "model": " ",
     "temperature": 0.7,
     "max_tokens": 2000,
+    "max_history_rounds": 10
+  },
+   "fast_model": {
+    "api_key": " ",
+    "base_url": "https://naga.furina.chat/v1",
+    "model": " ",
+    "temperature": 0.7,
+    "max_tokens": 8000,
     "max_history_rounds": 10
   },
   "api_server": {
@@ -69,7 +77,7 @@
     "qos": 1
   },
   "ui": {
-    "user_name": "用户",
+    "user_name": "User",
     "bg_alpha": 0.81,
     "window_bg_alpha": 128,
     "mac_btn_size": 36,

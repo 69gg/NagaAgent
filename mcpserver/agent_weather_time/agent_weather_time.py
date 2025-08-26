@@ -56,7 +56,7 @@ class WeatherTimeTool:
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config.json')
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-        api_key = config.get('weather_api_key')
+        api_key = config.get('weather').get('api_key')
         
         url = f'https://restapi.amap.com/v3/weather/weatherInfo?city={city}&key={api_key}&extensions=all'
         async with aiohttp.ClientSession() as session:
@@ -232,7 +232,7 @@ class WeatherTimeTool:
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config.json')
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-        api_key = config.get('weather_api_key')
+        api_key = config.get('weather').get('api_key')
 
         # 使用高德行政区域查询API的URL
         url = f'https://restapi.amap.com/v3/config/district?keywords={keywords}&key={api_key}&subdistrict=0'

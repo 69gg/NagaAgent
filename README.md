@@ -1,13 +1,16 @@
-# NagaAgent 3.1
+# NagaAgent 3.2
 
-![NagaAgent Logo](https://img.shields.io/badge/NagaAgent-3.1-blue?style=for-the-badge&logo=python&logoColor=white)
+![NagaAgent Logo](https://img.shields.io/badge/NagaAgent-3.2-blue?style=for-the-badge&logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge)
 
-
 ![Star History](https://img.shields.io/github/stars/Xxiii8322766509/NagaAgent?style=social)![Forks](https://img.shields.io/github/forks/Xxiii8322766509/NagaAgent?style=social)![Issues](https://img.shields.io/github/issues/Xxiii8322766509/NagaAgent)![Pull Requests](https://img.shields.io/github/issues-pr/Xxiii8322766509/NagaAgent)
+
+---
+
+![](https://api.star-history.com/svg?repos=Xxiii8322766509/NagaAgent&type=Date)
 
 ---
 
@@ -19,17 +22,18 @@
 
 ### 🎯 项目亮点
 
-✅ **🧠 智能记忆**: 基于 Neo4j 的 GRAG 知识图谱记忆系统  
-✅ **🔧 丰富生态**: 支持多种 MCP 服务和 Agent 系统  
-✅ **🎤 语音交互**: OpenAI 兼容的流式语音合成服务  
-✅ **🖥️ 现代界面**: 基于 PyQt5 的独立对话框消息渲染系统  
-✅ **🌐 完整 API**: FastAPI RESTful API 和流式输出  
-✅ **📱 系统托盘**: 完整的后台运行和自启动支持  
-✅ **🔍 智能代理**: 动态服务发现和热插拔管理  
-✅ **🛡️ 安全可靠**: 会话隔离和权限管理  
-✅ **🤖 多Agent协作**: AgentManager 独立系统支持多Agent协作  
-✅ **🌳 深度思考**: 基于遗传算法的多分支思考引擎  
-✅ **🔄 配置热更新**: 实时配置变更，无需重启应用  
+✅ **🧠 智能记忆**: 基于 Neo4j 的 GRAG 知识图谱记忆系统，支持分类型存储和时间轴管理  
+✅ **🔧 丰富生态**: 支持多种 MCP 服务和 Agent 系统，动态服务发现和热插拔  
+✅ **🎤 语音交互**: OpenAI 兼容的流式语音合成服务，完全异步处理  
+✅ **🖥️ 现代界面**: 基于 PyQt5 的独立对话框消息渲染系统，支持透明背景  
+✅ **🌐 完整 API**: FastAPI RESTful API 和流式输出，自动文档生成  
+✅ **📱 系统托盘**: 完整的后台运行和自启动支持，真正的最小化到托盘  
+✅ **🔍 智能代理**: 统一的工具调用接口，支持 MCP 和 Agent 混合调用  
+✅ **🛡️ 安全可靠**: 会话隔离和权限管理，配置热更新系统  
+✅ **🤖 多Agent协作**: AgentManager 独立系统，支持会话管理和占位符替换  
+✅ **🌳 深度思考**: 基于遗传算法的多分支思考引擎，问题难度评估  
+✅ **⏰ 时间轴管理**: 智能时间衰减和记忆查询，本地时区时间显示  
+✅ **🎯 角色强化**: 完善的 AI 提示词系统，保持角色一致性  
 
 ---
 
@@ -505,6 +509,12 @@ NagaAgent3.1/
 │   ├── quintuple_extractor.py  # 五元组提取器
 │   ├── quintuple_graph.py      # Neo4j图谱操作
 │   ├── quintuple_rag_query.py  # 记忆查询
+│   ├── time_axis_manager.py    # 时间轴管理
+│   ├── intelligent_memory_extractor.py  # 智能记忆提取器
+│   ├── semantic_deduplicator.py  # 语义去重器
+│   ├── typed_memory_storage.py  # 分类型存储
+│   ├── entity_disambiguator.py  # 实体消歧
+│   ├── multi_modal_query_system.py  # 多模态查询
 │   └── quintuple_visualize_v2.py  # 图谱可视化
 ├── voice/                      # 语音交互系统
 │   ├── tts_handler.py          # TTS处理器
@@ -934,6 +944,30 @@ print(result["answer"])  # 输出综合后的最终答案
 ---
 
 ## 📋 更新日志
+
+### v3.2.0 (2025-08-26)
+
+#### 🚀 新增功能
+- **时间轴管理系统**: 智能时间衰减和记忆查询，支持本地时区时间显示
+- **分类型记忆存储**: 支持事实、过程、情感、元记忆四种类型的独立存储
+- **智能记忆提取器**: 根据查询需求动态选择记忆提取策略
+- **语义去重机制**: 基于语义相似度的记忆去重和合并
+- **实体消歧系统**: 智能识别和合并相同实体的不同表达
+- **多模态查询系统**: 支持关键词、语义、时间、重要性等多种查询方式
+- **AI提示词强化**: 完善的提示词系统，着重强化角色保持和一致性
+
+#### 🔧 功能改进
+- **时间格式优化**: 记忆时间显示改为本地时区时间字符串，保留原始时间戳用于计算
+- **记忆查询性能**: 优化查询算法，支持时间窗口过滤和重要性排序
+- **提示词结构化**: 所有系统提示词采用结构化格式，提高AI理解和执行效果
+- **记忆管理优化**: 改进记忆的存储、检索和清理机制
+- **代码清理**: 删除无用文件，优化项目结构
+
+#### 🐛 问题修复
+- **时间显示问题**: 修复记忆时间显示为时间戳的问题，改为可读的本地时间
+- **记忆重复存储**: 修复相似记忆重复存储的问题，实现智能去重
+- **角色一致性**: 通过强化的提示词系统，保持AI角色的一致性
+- **系统稳定性**: 优化内存管理，减少内存泄漏
 
 ### v3.1.0 (2024-08-17)
 
