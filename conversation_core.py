@@ -695,15 +695,19 @@ class NagaConversation: # 对话主类
                 self.messages += [{"role": "user", "content": u}, {"role": "assistant", "content": display_text}]
                 self.save_log(u, display_text)
                 
-                # 智能记忆存储流程（开发者模式不写入，后台异步执行）
+                # 智能记忆存储流程（开发者模式不写入，使用同步方式确保可靠性）
                 if self.memory_manager and not self.dev_mode:
                     try:
-                        print(f"启动后台智能记忆存储：{now()}")
-                        # 使用后台智能记忆存储，不阻塞主流程
-                        await self.memory_manager.store_memory_intelligent_background(u, display_text)
-                        print(f"后台记忆存储任务已启动")
+                        print(f"启动智能记忆存储：{now()}")
+                        # 使用同步方式确保记忆存储可靠工作
+                        store_success = await self.memory_manager.store_memory_intelligent(u, display_text)
+                        if store_success:
+                            print(f"智能记忆存储完成：{len(u)}字用户输入 + {len(display_text)}字AI回复")
+                        else:
+                            print(f"智能记忆存储跳过：决策结果为不存储")
                     except Exception as e:
-                        logger.error(f"启动后台记忆存储失败: {e}")
+                        logger.error(f"智能记忆存储失败: {e}")
+                        print(f"智能记忆存储失败：{e}")
                 
                 # 禁用异步思考判断结果检查
                 # if thinking_task and not thinking_task.done():
@@ -751,6 +755,18 @@ class NagaConversation: # 对话主类
             traceback.print_exc(file=sys.stderr)
             yield ("娜迦", f"[MCP异常]: {e}")
             return
+
+    async def _background_memory_storage(self, user_question: str, ai_response: str) -> None:
+        """改进的后台记忆存储方法，使用主事件循环"""
+        try:
+            store_success = await self.memory_manager.store_memory_intelligent(user_question, ai_response)
+            if store_success:
+                print(f"后台记忆存储完成：{len(user_question)}字用户输入 + {len(ai_response)}字AI回复")
+            else:
+                print(f"后台记忆存储完成：决策跳过存储")
+        except Exception as e:
+            logger.error(f"后台记忆存储任务失败: {e}")
+            print(f"后台记忆存储失败：{e}")
 
     async def get_response(self, prompt: str, temperature: float = 0.7) -> str:
         """为树状思考系统等提供API调用接口""" # 统一接口
