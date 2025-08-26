@@ -12,16 +12,16 @@
     "base_url": "https://naga.furina.chat/v1",
     "model": " ",
     "temperature": 0.7,
-    "max_tokens": 2000,
-    "max_history_rounds": 10
+    "max_tokens": 16384,
+    "max_history_rounds": 20
   },
    "fast_model": {
     "api_key": " ",
     "base_url": "https://naga.furina.chat/v1",
     "model": " ",
     "temperature": 0.7,
-    "max_tokens": 8000,
-    "max_history_rounds": 10
+    "max_tokens": 16384,
+    "max_history_rounds": 20
   },
   "api_server": {
     "enabled": true,
@@ -35,14 +35,18 @@
     "auto_extract": true,
     "context_length": 5,
     "similarity_threshold": 0.6,
-    "neo4j_uri": "neo4j://127.0.0.1:7687",
+    "neo4j_uri": "neo4j://127.0.0.1:8687",
     "neo4j_user": "neo4j",
-    "neo4j_password": "Xx2017105",
+    "neo4j_password": "20110212",
     "neo4j_database": "neo4j",
-    "extraction_timeout": 12,
-    "extraction_retries": 2,
-    "base_timeout": 15,
-	"intelligent_query": {
+    "extraction_timeout": 600,
+    "extraction_retries": 3,
+    "base_timeout": 600,
+    "task_timeout": 600,
+    "max_workers": 3,
+    "max_queue_size": 100,
+    "auto_cleanup_hours": 24,
+    "intelligent_query": {
       "enabled": true,
       "analysis_timeout": 30,
       "query_timeout": 60,
@@ -56,7 +60,9 @@
       "learning_enabled": true,
       "interest_tracking": true,
       "pattern_recognition": true
-    }
+    },
+    "memory_decision_enabled": true,
+    "intelligent_memory_enabled": true
   },
   "handoff": {
     "max_loop_stream": 5,
