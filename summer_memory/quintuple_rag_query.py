@@ -192,11 +192,16 @@ def query_knowledge_with_keywords(user_question, predefined_keywords=None, memor
                 memory_type = quintuple.get("memory_type", "fact")
                 importance_score = quintuple.get("importance_score", 0.5)
                 
-                # 格式化时间
+                # 格式化时间（支持新格式）
                 time_str = ""
                 if timestamp:
-                    import time
-                    time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
+                    if isinstance(timestamp, str):
+                        # 新格式：已经是格式化的字符串
+                        time_str = f" (时间: {timestamp})"
+                    else:
+                        # 旧格式：时间戳
+                        import time
+                        time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
                 
                 # 构建带时间信息的回答
                 answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type}){time_str}\n"
@@ -257,11 +262,16 @@ def query_knowledge(user_question):
                 memory_type = quintuple.get("memory_type", "fact")
                 importance_score = quintuple.get("importance_score", 0.5)
                 
-                # 格式化时间
+                # 格式化时间（支持新格式）
                 time_str = ""
                 if timestamp:
-                    import time
-                    time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
+                    if isinstance(timestamp, str):
+                        # 新格式：已经是格式化的字符串
+                        time_str = f" (时间: {timestamp})"
+                    else:
+                        # 旧格式：时间戳
+                        import time
+                        time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
                 
                 # 构建带时间信息的回答
                 answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type}){time_str}\n"
