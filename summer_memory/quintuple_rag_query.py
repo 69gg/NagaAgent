@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from config import config
 from openai import OpenAI
+from .json_utils import clean_and_parse_json
 
 # 初始化OpenAI客户端
 client = OpenAI(
@@ -56,7 +57,7 @@ def _extract_keywords_structured(user_question: str, context_str: str) -> List[s
 请仔细分析文本，提取所有与知识图谱相关的核心关键词，避免无关词。
 """
 
-    max_retries = 3
+    max_retries = 1  # 减少重试次数，失败后立即回退
 
     for attempt in range(max_retries + 1):
         logger.info(f"尝试使用结构化输出提取关键词 (第{attempt + 1}次)")
@@ -84,10 +85,11 @@ def _extract_keywords_structured(user_question: str, context_str: str) -> List[s
 
         except Exception as e:
             logger.warning(f"结构化输出失败: {str(e)}")
-            logger.info("结构化输出失败，回退到传统JSON解析方法")
-            return _extract_keywords_fallback(user_question, context_str)
-
-    return []
+            # 立即回退到传统方法，不再重试
+            break
+    
+    logger.info("结构化输出失败，立即回退到传统JSON解析方法")
+    return _extract_keywords_fallback(user_question, context_str)
 
 def _extract_keywords_fallback(user_question: str, context_str: str) -> List[str]:
     """传统JSON解析的关键词提取（回退方案）"""
@@ -117,23 +119,26 @@ def _extract_keywords_fallback(user_question: str, context_str: str) -> List[str
 
             content = response.choices[0].message.content.strip()
             
-            # 尝试解析JSON
-            try:
-                keywords = json.loads(content)
-                if isinstance(keywords, list):
-                    logger.info(f"传统方法成功，提取到 {len(keywords)} 个关键词")
-                    return keywords
-                else:
-                    raise ValueError("响应不是列表格式")
-            except json.JSONDecodeError:
-                logger.error(f"JSON解析失败，原始内容: {content[:200]}")
-                # 尝试直接提取数组
+            # 使用统一的JSON清理和解析工具
+            keywords = clean_and_parse_json(content, expected_type=list, default=[])
+            
+            if keywords:
+                logger.info(f"传统方法成功，提取到 {len(keywords)} 个关键词")
+                return keywords
+            else:
+                logger.warning("传统方法JSON解析失败，尝试额外解析策略")
+                # 尝试直接提取数组作为最后的策略
                 if '[' in content and ']' in content:
-                    start = content.index('[')
-                    end = content.rindex(']') + 1
-                    keywords = json.loads(content[start:end])
-                    return keywords
-                raise
+                    try:
+                        start = content.index('[')
+                        end = content.rindex(']') + 1
+                        array_content = content[start:end]
+                        keywords = json.loads(array_content)
+                        if isinstance(keywords, list):
+                            logger.info(f"数组提取策略成功，提取到 {len(keywords)} 个关键词")
+                            return keywords
+                    except:
+                        pass
 
         except Exception as e:
             logger.error(f"传统方法提取失败: {str(e)}")
