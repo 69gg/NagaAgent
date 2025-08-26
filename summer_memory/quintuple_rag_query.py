@@ -147,35 +147,35 @@ def _extract_keywords_fallback(user_question: str, context_str: str) -> List[str
 
     return []
 
-def query_knowledge(user_question):
-    """使用配置的模型API提取关键词并查询知识图谱"""
+def query_knowledge_with_keywords(user_question, predefined_keywords=None, memory_types=None):
+    """使用预提取关键词查询知识图谱，支持记忆类型过滤"""
     context_str = "\n".join(recent_context) if recent_context else "无上下文"
     
-    # 首先尝试使用结构化输出
-    keywords = _extract_keywords_structured(user_question, context_str)
+    # 使用预定义的关键词或提取关键词
+    if predefined_keywords:
+        keywords = predefined_keywords
+        logger.info(f"使用预定义关键词: {keywords}")
+    else:
+        # 首先尝试使用结构化输出
+        keywords = _extract_keywords_structured(user_question, context_str)
+        logger.info(f"提取关键词: {keywords}")
     
-    # 如果结构化输出失败，返回空列表
+    # 如果没有关键词，返回空字符串而不是错误信息
     if not keywords:
-        logger.warning("所有提取方法都失败，未提取到关键词")
-        return "无法解析关键词，请检查问题格式。"
-
+        logger.warning("未提取到关键词")
+        return ""
+    
     # 验证关键词格式
     if not isinstance(keywords, list):
         logger.error(f"关键词格式错误: {keywords}")
-        return "无法解析关键词，请检查问题格式。"
-
-    if not keywords:
-        logger.warning("未提取到关键词")
-        return "未找到相关关键词，请提供更具体的问题。"
-
-    logger.info(f"提取关键词: {keywords}")
+        return ""
     
     try:
         from .quintuple_graph import query_graph_by_keywords
-        quintuples = query_graph_by_keywords(keywords)
+        quintuples = query_graph_by_keywords(keywords, memory_types)
         if not quintuples:
             logger.info(f"未找到相关五元组: {keywords}")
-            return "未在知识图谱中找到相关信息。"
+            return ""
 
         answer = "我在知识图谱中找到以下相关信息：\n\n"
         for quintuple in quintuples:
@@ -209,4 +209,69 @@ def query_knowledge(user_question):
 
     except Exception as e:
         logger.error(f"查询知识图谱过程中发生错误: {e}")
-        return "查询知识图谱过程中发生错误，请稍后重试。"
+        return ""
+
+
+def query_knowledge(user_question):
+    """使用配置的模型API提取关键词并查询知识图谱（保持向后兼容）"""
+    context_str = "\n".join(recent_context) if recent_context else "无上下文"
+    
+    # 首先尝试使用结构化输出
+    keywords = _extract_keywords_structured(user_question, context_str)
+    
+    # 如果结构化输出失败，返回空字符串
+    if not keywords:
+        logger.warning("所有提取方法都失败，未提取到关键词")
+        return ""
+
+    # 验证关键词格式
+    if not isinstance(keywords, list):
+        logger.error(f"关键词格式错误: {keywords}")
+        return ""
+
+    if not keywords:
+        logger.warning("未提取到关键词")
+        return ""
+
+    logger.info(f"提取关键词: {keywords}")
+    
+    try:
+        from .quintuple_graph import query_graph_by_keywords
+        quintuples = query_graph_by_keywords(keywords)
+        if not quintuples:
+            logger.info(f"未找到相关五元组: {keywords}")
+            return ""
+
+        answer = "我在知识图谱中找到以下相关信息：\n\n"
+        for quintuple in quintuples:
+            if isinstance(quintuple, dict):
+                # 新格式：包含时间信息的增强五元组
+                h = quintuple["subject"]
+                h_type = quintuple["subject_type"]
+                r = quintuple["predicate"]
+                t = quintuple["object"]
+                t_type = quintuple["object_type"]
+                
+                # 获取时间信息
+                timestamp = quintuple.get("timestamp")
+                memory_type = quintuple.get("memory_type", "fact")
+                importance_score = quintuple.get("importance_score", 0.5)
+                
+                # 格式化时间
+                time_str = ""
+                if timestamp:
+                    import time
+                    time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
+                
+                # 构建带时间信息的回答
+                answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type}){time_str}\n"
+                answer += f"  记忆类型: {memory_type}, 重要性: {importance_score:.2f}\n"
+            else:
+                # 旧格式：兼容性处理
+                h, h_type, r, t, t_type = quintuple
+                answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type})\n"
+        return answer
+
+    except Exception as e:
+        logger.error(f"查询知识图谱过程中发生错误: {e}")
+        return ""
