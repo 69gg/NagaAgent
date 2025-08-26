@@ -3,11 +3,23 @@ import json
 import logging
 import sys
 import os
+import re
+import time
+from typing import List, Dict, Any
 
 # 添加项目根目录到路径，以便导入config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from config import config
+from openai import OpenAI
+from .json_utils import clean_and_parse_json
+
+# 初始化OpenAI客户端
+client = OpenAI(
+    api_key=config.api.api_key,
+    base_url=config.api.base_url
+)
+
 API_URL = f"{config.api.base_url.rstrip('/')}/chat/completions"
 
 # 设置日志
@@ -17,6 +29,11 @@ logger = logging.getLogger(__name__)
 # 缓存最近处理的文本
 recent_context = []
 
+# 定义关键词响应的Pydantic模型
+from pydantic import BaseModel
+class KeywordResponse(BaseModel):
+    keywords: List[str]
+
 def set_context(texts):
     """设置查询上下文"""
     global recent_context
@@ -25,90 +42,246 @@ def set_context(texts):
     recent_context = texts[:context_length]  # 限制上下文长度
     logger.info(f"更新查询上下文: {len(recent_context)} 条记录")
 
-def query_knowledge(user_question):
-    """使用 DeepSeek API 提取关键词并查询知识图谱"""
-    context_str = "\n".join(recent_context) if recent_context else "无上下文"
-    prompt = (
-        f"基于以下上下文和用户问题，提取与知识图谱相关的关键词（如人物、物体、关系、实体类型），"
-        f"仅以列表的形式返回核心关键词，避免无关词。返回 JSON 格式的关键词列表：\n"
-        f"上下文：\n{context_str}\n"
-        f"问题：{user_question}\n"
-        f"输出格式：```json\n[]\n```"
-    )
+def _extract_keywords_structured(user_question: str, context_str: str) -> List[str]:
+    """使用结构化输出提取关键词"""
+    system_prompt = """
+你是一个专业的中文文本关键词提取专家。你的任务是从给定的上下文和用户问题中提取与知识图谱相关的关键词。
 
-    headers = {
-        "Authorization": f"Bearer {config.api.api_key}",
-        "Content-Type": "application/json"
-    }
+关键词类型包括但不限于：
+- 人物（如：小明、张三、李四）
+- 物体（如：足球、电脑、手机）
+- 关系（如：踢、拥有、创建）
+- 实体类型（如：人物、地点、组织、物品）
+- 概念（如：学习、工作、生活）
 
-    # 检测是否使用ollama并启用结构化输出
-    is_ollama = "localhost" in config.api.base_url or "11434" in config.api.base_url
-    
-    body = {
-        "model": config.api.model,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 150,
-        "temperature": 0.5  # 降低温度，提高精准度
-    }
-    
-    # 为ollama添加结构化输出
-    if is_ollama:
-        body["format"] = "json"
-        # 简化提示词，ollama会自动处理JSON格式
-        simplified_prompt = (
-            f"基于以下上下文和用户问题，提取与知识图谱相关的关键词（如人物、物体、关系、实体类型），"
-            f"仅返回核心关键词，避免无关词。直接返回关键词数组：\n"
-            f"上下文：\n{context_str}\n"
-            f"问题：{user_question}"
-        )
-        body["messages"] = [{"role": "user", "content": simplified_prompt}]
+请仔细分析文本，提取所有与知识图谱相关的核心关键词，避免无关词。
+"""
 
-    try:
-        response = requests.post(API_URL, headers=headers, json=body, timeout=20)
-        response.raise_for_status()
-        content = response.json()
+    max_retries = 1  # 减少重试次数，失败后立即回退
 
-        if "choices" not in content or not content["choices"]:
-            logger.error("DeepSeek API 响应中未找到 'choices' 字段")
-            return "无法处理 API 响应，请稍后重试。"
+    for attempt in range(max_retries + 1):
+        logger.info(f"尝试使用结构化输出提取关键词 (第{attempt + 1}次)")
 
-        raw_content = content["choices"][0]["message"]["content"]
         try:
-            raw_content = raw_content.strip()
-            if raw_content.startswith("```json") and raw_content.endswith("```"):
-                raw_content = raw_content[7:-3].strip()
-            keywords = json.loads(raw_content)
-            print(keywords)
-            if not isinstance(keywords, list):
-                raise ValueError("关键词应为列表")
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"解析 DeepSeek 响应失败: {raw_content}, 错误: {e}")
-            return "无法解析关键词，请检查问题格式。"
+            # 尝试使用结构化输出
+            completion = client.beta.chat.completions.parse(
+                model=config.api.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"基于以下上下文和用户问题，提取与知识图谱相关的关键词：\n\n上下文：\n{context_str}\n\n问题：{user_question}"}
+                ],
+                response_format=KeywordResponse,
+                max_tokens=config.api.max_tokens,
+                temperature=0.3,
+                timeout=600
+            )
 
-        if not keywords:
-            logger.warning("未提取到关键词")
-            return "未找到相关关键词，请提供更具体的问题。"
+            # 解析结果
+            result = completion.choices[0].message.parsed
+            keywords = result.keywords
+            
+            logger.info(f"结构化输出成功，提取到 {len(keywords)} 个关键词")
+            return keywords
 
+        except Exception as e:
+            logger.warning(f"结构化输出失败: {str(e)}")
+            # 立即回退到传统方法，不再重试
+            break
+    
+    logger.info("结构化输出失败，立即回退到传统JSON解析方法")
+    return _extract_keywords_fallback(user_question, context_str)
+
+def _extract_keywords_fallback(user_question: str, context_str: str) -> List[str]:
+    """传统JSON解析的关键词提取（回退方案）"""
+    prompt = f"""
+基于以下上下文和用户问题，提取与知识图谱相关的关键词（如人物、物体、关系、实体类型），
+仅返回核心关键词，避免无关词。直接返回关键词数组的JSON格式：
+
+上下文：
+{context_str}
+
+问题：{user_question}
+
+输出格式：[["关键词1", "关键词2", "关键词3"]]
+"""
+
+    max_retries = 2
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=config.api.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=config.api.max_tokens,
+                temperature=0.3,
+                timeout=600
+            )
+
+            content = response.choices[0].message.content.strip()
+            
+            # 使用统一的JSON清理和解析工具
+            keywords = clean_and_parse_json(content, expected_type=list, default=[])
+            
+            if keywords:
+                logger.info(f"传统方法成功，提取到 {len(keywords)} 个关键词")
+                return keywords
+            else:
+                logger.warning("传统方法JSON解析失败，尝试额外解析策略")
+                # 尝试直接提取数组作为最后的策略
+                if '[' in content and ']' in content:
+                    try:
+                        start = content.index('[')
+                        end = content.rindex(']') + 1
+                        array_content = content[start:end]
+                        keywords = json.loads(array_content)
+                        if isinstance(keywords, list):
+                            logger.info(f"数组提取策略成功，提取到 {len(keywords)} 个关键词")
+                            return keywords
+                    except:
+                        pass
+
+        except Exception as e:
+            logger.error(f"传统方法提取失败: {str(e)}")
+            if attempt < max_retries:
+                time.sleep(1 + attempt)
+
+    return []
+
+def query_knowledge_with_keywords(user_question, predefined_keywords=None, memory_types=None):
+    """使用预提取关键词查询知识图谱，支持记忆类型过滤"""
+    context_str = "\n".join(recent_context) if recent_context else "无上下文"
+    
+    # 使用预定义的关键词或提取关键词
+    if predefined_keywords:
+        keywords = predefined_keywords
+        logger.info(f"使用预定义关键词: {keywords}")
+    else:
+        # 首先尝试使用结构化输出
+        keywords = _extract_keywords_structured(user_question, context_str)
         logger.info(f"提取关键词: {keywords}")
+    
+    # 如果没有关键词，返回空字符串而不是错误信息
+    if not keywords:
+        logger.warning("未提取到关键词")
+        return ""
+    
+    # 验证关键词格式
+    if not isinstance(keywords, list):
+        logger.error(f"关键词格式错误: {keywords}")
+        return ""
+    
+    try:
+        from .quintuple_graph import query_graph_by_keywords
+        quintuples = query_graph_by_keywords(keywords, memory_types)
+        if not quintuples:
+            logger.info(f"未找到相关五元组: {keywords}")
+            return ""
+
+        answer = "我在知识图谱中找到以下相关信息：\n\n"
+        for quintuple in quintuples:
+            if isinstance(quintuple, dict):
+                # 新格式：包含时间信息的增强五元组
+                h = quintuple["subject"]
+                h_type = quintuple["subject_type"]
+                r = quintuple["predicate"]
+                t = quintuple["object"]
+                t_type = quintuple["object_type"]
+                
+                # 获取时间信息
+                timestamp = quintuple.get("timestamp")
+                memory_type = quintuple.get("memory_type", "fact")
+                importance_score = quintuple.get("importance_score", 0.5)
+                
+                # 格式化时间（支持新格式）
+                time_str = ""
+                if timestamp:
+                    if isinstance(timestamp, str):
+                        # 新格式：已经是格式化的字符串
+                        time_str = f" (时间: {timestamp})"
+                    else:
+                        # 旧格式：时间戳
+                        import time
+                        time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
+                
+                # 构建带时间信息的回答
+                answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type}){time_str}\n"
+                answer += f"  记忆类型: {memory_type}, 重要性: {importance_score:.2f}\n"
+            else:
+                # 旧格式：兼容性处理
+                h, h_type, r, t, t_type = quintuple
+                answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type})\n"
+        return answer
+
+    except Exception as e:
+        logger.error(f"查询知识图谱过程中发生错误: {e}")
+        return ""
+
+
+def query_knowledge(user_question):
+    """使用配置的模型API提取关键词并查询知识图谱（保持向后兼容）"""
+    context_str = "\n".join(recent_context) if recent_context else "无上下文"
+    
+    # 首先尝试使用结构化输出
+    keywords = _extract_keywords_structured(user_question, context_str)
+    
+    # 如果结构化输出失败，返回空字符串
+    if not keywords:
+        logger.warning("所有提取方法都失败，未提取到关键词")
+        return ""
+
+    # 验证关键词格式
+    if not isinstance(keywords, list):
+        logger.error(f"关键词格式错误: {keywords}")
+        return ""
+
+    if not keywords:
+        logger.warning("未提取到关键词")
+        return ""
+
+    logger.info(f"提取关键词: {keywords}")
+    
+    try:
         from .quintuple_graph import query_graph_by_keywords
         quintuples = query_graph_by_keywords(keywords)
         if not quintuples:
             logger.info(f"未找到相关五元组: {keywords}")
-            return "未在知识图谱中找到相关信息。"
+            return ""
 
         answer = "我在知识图谱中找到以下相关信息：\n\n"
-        for h, h_type, r, t, t_type in quintuples:
-            answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type})\n"
+        for quintuple in quintuples:
+            if isinstance(quintuple, dict):
+                # 新格式：包含时间信息的增强五元组
+                h = quintuple["subject"]
+                h_type = quintuple["subject_type"]
+                r = quintuple["predicate"]
+                t = quintuple["object"]
+                t_type = quintuple["object_type"]
+                
+                # 获取时间信息
+                timestamp = quintuple.get("timestamp")
+                memory_type = quintuple.get("memory_type", "fact")
+                importance_score = quintuple.get("importance_score", 0.5)
+                
+                # 格式化时间（支持新格式）
+                time_str = ""
+                if timestamp:
+                    if isinstance(timestamp, str):
+                        # 新格式：已经是格式化的字符串
+                        time_str = f" (时间: {timestamp})"
+                    else:
+                        # 旧格式：时间戳
+                        import time
+                        time_str = f" (时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))})"
+                
+                # 构建带时间信息的回答
+                answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type}){time_str}\n"
+                answer += f"  记忆类型: {memory_type}, 重要性: {importance_score:.2f}\n"
+            else:
+                # 旧格式：兼容性处理
+                h, h_type, r, t, t_type = quintuple
+                answer += f"- {h}({h_type}) —[{r}]→ {t}({t_type})\n"
         return answer
 
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"DeepSeek API HTTP 错误: {e}")
-        return "调用 DeepSeek API 失败，请检查 API 密钥或网络连接。"
-    except requests.exceptions.RequestException as e:
-        logger.error(f"DeepSeek API 请求失败: {e}")
-        return "无法连接到 DeepSeek API，请检查网络。"
     except Exception as e:
-        logger.error(f"查询过程中发生未知错误: {e}")
-        return "查询过程中发生未知错误，请稍后重试。"
+        logger.error(f"查询知识图谱过程中发生错误: {e}")
+        return ""
