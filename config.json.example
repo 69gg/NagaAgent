@@ -2,9 +2,9 @@
   "system": {
     "version": "3.0",
     "voice_enabled": true,
-    "stream_mode": true,
+    "stream_mode": false,
     "debug": false,
-    "log_level": "DEBUG",
+    "log_level": "WARNING",
     "save_prompts": true
   },
   "api": {
