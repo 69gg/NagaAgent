@@ -114,7 +114,7 @@ class GRAGConfig(BaseModel):
     task_manager_enabled: bool = Field(default=True, description="是否启用任务管理器")
     max_workers: int = Field(default=3, ge=1, le=10, description="最大并发工作线程数")
     max_queue_size: int = Field(default=100, ge=10, le=1000, description="最大任务队列大小")
-    task_timeout: int = Field(default=30, ge=5, le=300, description="单个任务超时时间（秒）")
+    task_timeout: int = Field(default=600, ge=5, le=1800, description="单个任务超时时间（秒）")
     auto_cleanup_hours: int = Field(default=24, ge=1, le=168, description="自动清理任务保留时间（小时）")
     
     # 兼容旧版本的字段
