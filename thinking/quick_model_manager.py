@@ -489,22 +489,23 @@ class QuickModelManager:
     async def _call_fallback_model(self, prompt: str, system_prompt: str) -> str:
         """调用备用大模型"""
         try:
-            response = await self.fallback_client.chat.completions.create(
-                model=MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=config.api.max_tokens
-            )
+            # Deepseek适配 - 对于JSON格式化使用JSON模式
+            use_json_mode = (system_prompt == JSON_FORMAT_SYSTEM_PROMPT and 
+                           config.api.model.startswith("deepseek"))
             
-            return response.choices[0].message.content
-        except RuntimeError as e:
-            if "handler is closed" in str(e):
-                logger.debug(f"忽略连接关闭异常，重新创建客户端: {e}")
-                # 重新创建客户端并重试
-                self.fallback_client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL.rstrip('/') + '/')
+            if use_json_mode:
+                print("检测到Deepseek模型，在JSON格式化时使用json mode")
+                response = await self.fallback_client.chat.completions.create(
+                    model=MODEL,
+                    messages=[
+                        {"role": "system", "content": system_prompt + "请以json格式输出"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=config.api.max_tokens,
+                    response_format={'type': 'json_object'}
+                )
+            else:
                 response = await self.fallback_client.chat.completions.create(
                     model=MODEL,
                     messages=[
@@ -514,6 +515,39 @@ class QuickModelManager:
                     temperature=0.1,
                     max_tokens=config.api.max_tokens
                 )
+            
+            return response.choices[0].message.content
+        except RuntimeError as e:
+            if "handler is closed" in str(e):
+                logger.debug(f"忽略连接关闭异常，重新创建客户端: {e}")
+                # 重新创建客户端并重试
+                self.fallback_client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL.rstrip('/') + '/')
+                
+                # Deepseek适配 - 重试时也使用JSON模式
+                use_json_mode = (system_prompt == JSON_FORMAT_SYSTEM_PROMPT and 
+                               config.api.model.startswith("deepseek"))
+                
+                if use_json_mode:
+                    response = await self.fallback_client.chat.completions.create(
+                        model=MODEL,
+                        messages=[
+                            {"role": "system", "content": system_prompt + "请以json格式输出"},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=config.api.max_tokens,
+                        response_format={'type': 'json_object'}
+                    )
+                else:
+                    response = await self.fallback_client.chat.completions.create(
+                        model=MODEL,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=config.api.max_tokens
+                    )
                 return response.choices[0].message.content
             else:
                 raise

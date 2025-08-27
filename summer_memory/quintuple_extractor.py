@@ -170,13 +170,42 @@ async def _extract_quintuples_async_structured(text):
 
 类型包括但不限于：人物、地点、组织、物品、概念、时间、事件、活动等。
 
+请严格按照以下JSON格式返回结果：
+{
+  "quintuples": [
+    {
+      "subject": "主体文本",
+      "subject_type": "主体类型",
+      "predicate": "动作",
+      "object": "客体文本",
+      "object_type": "客体类型"
+    }
+  ]
+}
+
 例如：
 输入：小明在公园里踢足球。
-应该提取出：
-- 主体：小明，类型：人物，动作：踢，客体：足球，类型：物品
-- 主体：小明，类型：人物，动作：在，客体：公园，类型：地点
+输出：
+{
+  "quintuples": [
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "踢",
+      "object": "足球",
+      "object_type": "物品"
+    },
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "在",
+      "object": "公园",
+      "object_type": "地点"
+    }
+  ]
+}
 
-请仔细分析文本，提取所有可以识别出的五元组关系。
+请仔细分析文本，提取所有可以识别出的五元组关系，并严格按照上述JSON格式返回。
 """
 
     # 重试机制配置
@@ -186,6 +215,39 @@ async def _extract_quintuples_async_structured(text):
         logger.info(f"尝试使用结构化输出提取五元组 (第{attempt + 1}次)")
 
         try:
+            # Deepseek适配
+            if config.api.model.startswith("deepseek"):
+                print("检测到Deepseek模型，尝试使用json mode")
+                completion = await async_client.chat.completions.create(
+                    model=config.api.model,
+                    messages=[
+                    {"role": "system", "content": system_prompt+"请以json格式输出"},
+                    {"role": "user", "content": f"请从以下文本中提取五元组：\n\n{text}"}
+                ],
+                    response_format={
+                    'type': 'json_object'
+                },
+                timeout=600 + (attempt * 20)
+                )
+                result = completion.choices[0].message.content
+                try:
+                    result_data = json.loads(result)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                    logger.error(f"原始内容: {result[:500]}")
+                    raise
+                
+                quintuples = []
+
+                for q in result_data.get("quintuples", []):
+                    quintuples.append((
+                        q.get("subject", ""), q.get("subject_type", ""),
+                        q.get("predicate", ""), q.get("object", ""), q.get("object_type", "")
+                    ))
+
+                logger.info(f"Deepseek 结构化输出成功，提取到 {len(quintuples)} 个五元组")
+                return quintuples
+
             # 尝试使用结构化输出
             completion = await async_client.beta.chat.completions.parse(
                 model=fast_model_config["model"],
@@ -322,13 +384,42 @@ def _extract_quintuples_structured(text):
 
 类型包括但不限于：人物、地点、组织、物品、概念、时间、事件、活动等。
 
+请严格按照以下JSON格式返回结果：
+{
+  "quintuples": [
+    {
+      "subject": "主体文本",
+      "subject_type": "主体类型",
+      "predicate": "动作",
+      "object": "客体文本",
+      "object_type": "客体类型"
+    }
+  ]
+}
+
 例如：
 输入：小明在公园里踢足球。
-应该提取出：
-- 主体：小明，类型：人物，动作：踢，客体：足球，类型：物品
-- 主体：小明，类型：人物，动作：在，客体：公园，类型：地点
+输出：
+{
+  "quintuples": [
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "踢",
+      "object": "足球",
+      "object_type": "物品"
+    },
+    {
+      "subject": "小明",
+      "subject_type": "人物",
+      "predicate": "在",
+      "object": "公园",
+      "object_type": "地点"
+    }
+  ]
+}
 
-请仔细分析文本，提取所有可以识别出的五元组关系。
+请仔细分析文本，提取所有可以识别出的五元组关系，并严格按照上述JSON格式返回。
 """
 
     # 重试机制配置
@@ -338,6 +429,39 @@ def _extract_quintuples_structured(text):
         logger.info(f"尝试使用结构化输出提取五元组 (第{attempt + 1}次)")
 
         try:
+            # Deepseek适配
+            if config.api.model.startswith("deepseek"):
+                print("检测到Deepseek模型，尝试使用json mode")
+                completion = client.chat.completions.create(
+                    model=config.api.model,
+                    messages=[
+                    {"role": "system", "content": system_prompt+"请以json格式输出"},
+                    {"role": "user", "content": f"请从以下文本中提取五元组：\n\n{text}"}
+                ],
+                    response_format={
+                    'type': 'json_object'
+                },
+                timeout=600 + (attempt * 20)
+                )
+                result = completion.choices[0].message.content
+                try:
+                    result_data = json.loads(result)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                    logger.error(f"原始内容: {result[:500]}")
+                    raise
+                
+                quintuples = []
+
+                for q in result_data.get("quintuples", []):
+                    quintuples.append((
+                        q.get("subject", ""), q.get("subject_type", ""),
+                        q.get("predicate", ""), q.get("object", ""), q.get("object_type", "")
+                    ))
+
+                logger.info(f"Deepseek 结构化输出成功，提取到 {len(quintuples)} 个五元组")
+                return quintuples
+
             # 尝试使用结构化输出
             completion = client.beta.chat.completions.parse(
                 model=fast_model_config["model"],

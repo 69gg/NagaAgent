@@ -146,13 +146,50 @@ class MemoryDecisionMaker:
 - emotion: 情感记忆（情感、态度、偏好等）
 - meta: 元记忆（关于记忆本身的记忆）
 
-请仔细分析用户问题，提取关键信息，并做出决策。
+请严格按照以下JSON格式返回结果：
+{
+    "should_query": true/false,
+    "query_keywords": ["关键词1", "关键词2"],
+    "memory_types": ["fact", "process"],
+    "query_reason": "决策原因",
+    "confidence": 0.8
+}
+
+请仔细分析用户问题，提取关键信息，并做出决策，严格按照上述JSON格式返回。
 """
         
         max_retries = 1  # 减少重试次数，失败后立即回退
         
         for attempt in range(max_retries + 1):
             try:
+                # Deepseek适配
+                if config.api.model.startswith("deepseek"):
+                    print("检测到Deepseek模型，尝试使用json mode进行记忆查询决策")
+                    completion = await fast_async_client.chat.completions.create(
+                        model=config.api.model,
+                        messages=[
+                        {"role": "system", "content": system_prompt+"请以json格式输出"},
+                        {"role": "user", "content": f"请分析以下用户问题，决定是否需要查询记忆：\n\n问题：{user_question}"}
+                    ],
+                        response_format={
+                        'type': 'json_object'
+                    },
+                    max_tokens=fast_model_config["max_tokens"],
+                    temperature=0.3,
+                    timeout=600 + (attempt * 20)
+                    )
+                    result = completion.choices[0].message.content
+                    try:
+                        result_data = json.loads(result)
+                        decision = MemoryQueryDecision(**result_data)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                        logger.error(f"原始内容: {result[:500]}")
+                        raise
+                    
+                    logger.info(f"Deepseek 记忆查询决策成功: should_query={decision.should_query}, keywords={decision.query_keywords}")
+                    return decision
+
                 completion = await fast_async_client.beta.chat.completions.parse(
                     model=fast_model_config["model"],
                     messages=[
@@ -288,13 +325,51 @@ class MemoryDecisionMaker:
 
 重要性分数范围：0.0-1.0，分数越高表示越重要
 
-请仔细分析对话内容，识别关键信息，并做出决策。
+请严格按照以下JSON格式返回结果：
+{
+    "should_store": true/false,
+    "memory_type": "fact",
+    "importance_score": 0.8,
+    "key_entities": ["实体1", "实体2"],
+    "storage_reason": "存储原因",
+    "confidence": 0.8
+}
+
+请仔细分析对话内容，识别关键信息，并做出决策，严格按照上述JSON格式返回。
 """
         
         max_retries = 1  # 减少重试次数，失败后立即回退
         
         for attempt in range(max_retries + 1):
             try:
+                # Deepseek适配
+                if config.api.model.startswith("deepseek"):
+                    print("检测到Deepseek模型，尝试使用json mode进行记忆生成决策")
+                    completion = await fast_async_client.chat.completions.create(
+                        model=config.api.model,
+                        messages=[
+                        {"role": "system", "content": system_prompt+"请以json格式输出"},
+                        {"role": "user", "content": f"请分析以下对话对，决定是否需要生成记忆：\n\n用户：{user_question}\n\nAI：{ai_response}"}
+                    ],
+                        response_format={
+                        'type': 'json_object'
+                    },
+                    max_tokens=fast_model_config["max_tokens"],
+                    temperature=0.3,
+                    timeout=600 + (attempt * 20)
+                    )
+                    result = completion.choices[0].message.content
+                    try:
+                        result_data = json.loads(result)
+                        decision = MemoryGenerationDecision(**result_data)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                        logger.error(f"原始内容: {result[:500]}")
+                        raise
+                    
+                    logger.info(f"Deepseek 记忆生成决策成功: should_store={decision.should_store}, type={decision.memory_type}")
+                    return decision
+
                 completion = await fast_async_client.beta.chat.completions.parse(
                     model=fast_model_config["model"],
                     messages=[

@@ -54,7 +54,12 @@ def _extract_keywords_structured(user_question: str, context_str: str) -> List[s
 - 实体类型（如：人物、地点、组织、物品）
 - 概念（如：学习、工作、生活）
 
-请仔细分析文本，提取所有与知识图谱相关的核心关键词，避免无关词。
+请严格按照以下JSON格式返回结果：
+{
+    "keywords": ["关键词1", "关键词2", "关键词3"]
+}
+
+请仔细分析文本，提取所有与知识图谱相关的核心关键词，避免无关词，严格按照上述JSON格式返回。
 """
 
     max_retries = 1  # 减少重试次数，失败后立即回退
@@ -63,6 +68,34 @@ def _extract_keywords_structured(user_question: str, context_str: str) -> List[s
         logger.info(f"尝试使用结构化输出提取关键词 (第{attempt + 1}次)")
 
         try:
+            # Deepseek适配
+            if config.api.model.startswith("deepseek"):
+                print("检测到Deepseek模型，尝试使用json mode提取关键词")
+                completion = client.chat.completions.create(
+                    model=config.api.model,
+                    messages=[
+                    {"role": "system", "content": system_prompt+"请以json格式输出"},
+                    {"role": "user", "content": f"基于以下上下文和用户问题，提取与知识图谱相关的关键词：\n\n上下文：\n{context_str}\n\n问题：{user_question}"}
+                ],
+                    response_format={
+                    'type': 'json_object'
+                },
+                max_tokens=config.api.max_tokens,
+                temperature=0.3,
+                timeout=600
+                )
+                result = completion.choices[0].message.content
+                try:
+                    result_data = json.loads(result)
+                    keywords = result_data.get("keywords", [])
+                except json.JSONDecodeError as e:
+                    logger.error(f"Deepseek JSON解析失败: {str(e)}")
+                    logger.error(f"原始内容: {result[:500]}")
+                    raise
+                
+                logger.info(f"Deepseek 关键词提取成功，提取到 {len(keywords)} 个关键词")
+                return keywords
+
             # 尝试使用结构化输出
             completion = client.beta.chat.completions.parse(
                 model=config.api.model,

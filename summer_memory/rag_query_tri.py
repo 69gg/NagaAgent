@@ -43,13 +43,14 @@ def query_knowledge(user_question):
 
     # 检测是否使用ollama并启用结构化输出
     is_ollama = "localhost" in config.api.base_url or "11434" in config.api.base_url
+    is_deepseek = config.api.model.startswith("deepseek")
     
     body = {
         "model": config.api.model,
         "messages": [
             {"role": "user", "content": prompt}
         ],
-                    "max_tokens": config.api.max_tokens,
+        "max_tokens": config.api.max_tokens,
         "temperature": 0.5  # 降低温度，提高精准度
     }
     
@@ -60,6 +61,18 @@ def query_knowledge(user_question):
         simplified_prompt = (
             f"基于以下上下文和用户问题，提取与知识图谱相关的关键词（如实体、关系），"
             f"仅返回核心关键词，避免无关词。直接返回关键词数组：\n"
+            f"上下文：\n{context_str}\n"
+            f"问题：{user_question}"
+        )
+        body["messages"] = [{"role": "user", "content": simplified_prompt}]
+    # 为deepseek添加JSON模式支持
+    elif is_deepseek:
+        print("检测到Deepseek模型，在RAG查询时使用json mode")
+        body["response_format"] = {"type": "json_object"}
+        # 简化提示词，使用JSON格式
+        simplified_prompt = (
+            f"基于以下上下文和用户问题，提取与知识图谱相关的关键词（如实体、关系），"
+            f"仅返回核心关键词，避免无关词。请以JSON数组格式返回关键词。\n"
             f"上下文：\n{context_str}\n"
             f"问题：{user_question}"
         )
