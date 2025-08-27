@@ -1,0 +1,13 @@
+{
+  "timestamp": 0,
+  "apps": [],
+  "stats": {
+    "total_scanned": 0,
+    "registry_count": 0,
+    "desktop_entry_count": 0,
+    "bin_count": 0,
+    "shortcut_count": 0,
+    "error_count": 0,
+    "scan_duration": 0.0
+  }
+}

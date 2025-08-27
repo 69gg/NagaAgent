@@ -60,7 +60,7 @@ class CrossPlatformAppLauncher:
         self._process_monitor_task = None
         
         # 启动进程监控
-        if self.config["monitor_processes"]:
+        if self.config.get("monitor_processes", True):
             self._start_process_monitor()
     
     def _load_default_config(self) -> Dict:
@@ -96,7 +96,13 @@ class CrossPlatformAppLauncher:
     def _start_process_monitor(self) -> None:
         """启动进程监控任务"""
         if self._process_monitor_task is None or self._process_monitor_task.done():
-            self._process_monitor_task = asyncio.create_task(self._monitor_processes())
+            # 在有事件循环时创建任务
+            try:
+                loop = asyncio.get_running_loop()
+                self._process_monitor_task = loop.create_task(self._monitor_processes())
+            except RuntimeError:
+                # 没有运行的事件循环，稍后启动
+                self._process_monitor_task = None
     
     async def _monitor_processes(self) -> None:
         """监控已启动的进程"""
@@ -155,7 +161,7 @@ class CrossPlatformAppLauncher:
             )
         
         # 验证可执行文件
-        if self.config["validate_executable"]:
+        if self.config.get("validate_executable", True):
             validation = self._validate_executable(app_info.path)
             if not validation["valid"]:
                 return LaunchStatus(

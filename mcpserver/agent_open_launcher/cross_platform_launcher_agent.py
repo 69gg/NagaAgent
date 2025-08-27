@@ -5,8 +5,10 @@ import asyncio
 import logging
 import sys
 import traceback
+import platform
+import time
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 # 添加当前目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -134,6 +136,9 @@ class CrossPlatformLauncherAgent:
             # 预热扫描器（不阻塞）
             asyncio.create_task(self.scanner.ensure_scan_completed())
             
+            # 启动进程监控
+            self.launcher._start_process_monitor()
+            
             self.stats["startup_time"] = datetime.now()
             self.initialized = True
             
@@ -149,7 +154,7 @@ class CrossPlatformLauncherAgent:
         self.stats["total_requests"] += 1
         request_id = data.get("request_id", f"req_{self.stats['total_requests']}")
         
-        logger.info(f"📥 收到请求 [{request_id}]: {data.get('tool_name', 'Unknown')}")
+        logger.info(f"收到请求 [{request_id}]: {data.get('tool_name', 'Unknown')}")
         
         try:
             # 确保已初始化
@@ -183,7 +188,7 @@ class CrossPlatformLauncherAgent:
             self.stats["failed_requests"] += 1
             self.stats["last_error"] = str(e)
             
-            logger.error(f"❌ 处理请求失败 [{request_id}]: {e}")
+            logger.error(f"处理请求失败 [{request_id}]: {e}")
             logger.debug(traceback.format_exc())
             
             return self._create_error_response(
@@ -683,7 +688,3 @@ def get_agent_dependencies() -> List[str]:
         deps.extend(["pyobjc"])  # 可选，用于某些macOS功能
     
     return deps
-
-# 导入必要的模块
-import platform
-import time

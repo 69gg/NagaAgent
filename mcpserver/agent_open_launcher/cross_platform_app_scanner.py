@@ -5,7 +5,7 @@ import json
 import time
 import logging
 import hashlib
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Union
 from dataclasses import dataclass, asdict
 from enum import Enum
 from pathlib import Path
@@ -77,11 +77,15 @@ class CrossPlatformAppScanner:
             "cache_enabled": True,
             "cache_ttl": 3600,
             "max_apps": 1000,
+            # Windows扫描配置
             "scan_registry": True,
+            "scan_shortcuts": True,
+            # Linux扫描配置
             "scan_desktop_entries": True,
             "scan_bin_directories": True,
-            "scan_shortcuts": True,
+            # macOS扫描配置
             "scan_applications": True,
+            # 通用配置
             "debug_mode": False,
             "enable_incremental": True,
             "verify_executables": True
@@ -121,22 +125,26 @@ class CrossPlatformAppScanner:
         tasks = []
         
         # 根据平台创建扫描任务
-        if self.platform.os_type == OperatingSystem.WINDOWS:
-            if self.config["scan_registry"]:
-                tasks.append(self._scan_windows_registry())
-            if self.config["scan_shortcuts"]:
-                tasks.append(self._scan_windows_shortcuts())
-        
-        elif self.platform.os_type == OperatingSystem.LINUX:
-            if self.config["scan_desktop_entries"]:
-                tasks.append(self._scan_linux_desktop_entries())
-            if self.config["scan_bin_directories"]:
-                tasks.append(self._scan_linux_bin_directories())
-        
-        elif self.platform.os_type == OperatingSystem.MACOS:
-            if self.config["scan_applications"]:
-                tasks.append(self._scan_macos_applications())
-        
+        try:
+            if self.platform.os_type == OperatingSystem.WINDOWS:
+                if self.config.get("scan_registry", False):
+                    tasks.append(self._scan_windows_registry())
+                if self.config.get("scan_shortcuts", False):
+                    tasks.append(self._scan_windows_shortcuts())
+            
+            elif self.platform.os_type == OperatingSystem.LINUX:
+                if self.config.get("scan_desktop_entries", False):
+                    tasks.append(self._scan_linux_desktop_entries())
+                if self.config.get("scan_bin_directories", False):
+                    tasks.append(self._scan_linux_bin_directories())
+            
+            elif self.platform.os_type == OperatingSystem.MACOS:
+                if self.config.get("scan_applications", False):
+                    tasks.append(self._scan_macos_applications())
+        except Exception as e:
+            logger.error(f"创建扫描任务失败: {e}")
+            self._scan_stats["error_count"] += 1
+          
         # 并行执行扫描任务
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -212,9 +220,46 @@ class CrossPlatformAppScanner:
                                         logger.debug(f"处理App Path项失败 {app_name}: {e}")
                         except Exception as e:
                             logger.debug(f"枚举App Path键失败 {i}: {e}")
+            except PermissionError as e:
+                logger.warning(f"权限不足，无法访问App Paths注册表: {e}")
+                self._scan_stats["error_count"] += 1
             except Exception as e:
                 logger.error(f"扫描App Paths注册表失败: {e}")
                 self._scan_stats["error_count"] += 1
+            
+            # 也尝试扫描CurrentUser的注册表
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                                 r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths") as key:
+                    for i in range(winreg.QueryInfoKey(key)[0]):
+                        try:
+                            app_name = winreg.EnumKey(key, i)
+                            if app_name.endswith('.exe'):
+                                app_key_path = f"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{app_name}"
+                                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, app_key_path) as app_key:
+                                    try:
+                                        exe_path, _ = winreg.QueryValueEx(app_key, "")
+                                        if exe_path and os.path.exists(exe_path):
+                                            display_name = app_name[:-4]
+                                            file_info = self._get_file_info(exe_path)
+                                            
+                                            app = AppInfo(
+                                                name=app_name[:-4],
+                                                path=exe_path,
+                                                source=AppSource.REGISTRY_APP_PATHS,
+                                                display_name=display_name,
+                                                last_modified=file_info["modified"],
+                                                file_hash=file_info["hash"]
+                                            )
+                                            apps.append(app)
+                                    except Exception as e:
+                                        logger.debug(f"处理CurrentUser App Path项失败 {app_name}: {e}")
+                        except Exception as e:
+                            logger.debug(f"枚举CurrentUser App Path键失败 {i}: {e}")
+            except PermissionError as e:
+                logger.warning(f"权限不足，无法访问CurrentUser App Paths注册表: {e}")
+            except Exception as e:
+                logger.debug(f"扫描CurrentUser App Paths注册表失败: {e}")
             
             self._scan_stats["registry_count"] += len(apps)
             
@@ -536,9 +581,10 @@ class CrossPlatformAppScanner:
         result.sort(key=lambda x: x.display_name.lower())
         
         # 限制数量
-        if len(result) > self.config["max_apps"]:
-            result = result[:self.config["max_apps"]]
-            logger.warning(f"应用数量超过限制，已截断至 {self.config['max_apps']} 个")
+        max_apps = self.config.get("max_apps", 1000)
+        if len(result) > max_apps:
+            result = result[:max_apps]
+            logger.warning(f"应用数量超过限制，已截断至 {max_apps} 个")
         
         return result
     

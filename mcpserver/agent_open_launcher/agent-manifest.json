@@ -1,16 +1,16 @@
 {
-  "name": "跨平台应用启动服务",
-  "displayName": "Cross-Platform App Launcher Service",
-  "version": "3.1.0",
-  "description": "智能获取应用列表并启动指定应用 - 跨平台版，支持Windows、Linux和macOS",
-  "author": "pyl(1708213363@qq.com)",
+  "name": "应用启动器",
+  "displayName": "App Launcher",
+  "version": "1.0.0",
+  "description": "启动本地应用程序",
+  "author": "NagaAgent",
   "agentType": "mcp",
   "entryPoint": {
-    "module": "mcpserver.agent_open_launcher.cross_platform_launcher_agent",
-    "class": "CrossPlatformLauncherAgent"
+    "module": "mcpserver.agent_open_launcher.app_launcher_agent",
+    "class": "AppLauncherAgent"
   },
   "factory": {
-    "create_instance": "create_cross_platform_launcher_agent",
+    "create_instance": "create_app_launcher_agent",
     "validate_config": "validate_agent_config",
     "get_dependencies": "get_agent_dependencies"
   },
