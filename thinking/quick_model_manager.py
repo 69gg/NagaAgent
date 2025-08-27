@@ -24,7 +24,8 @@ from config import (
     NEXT_QUESTION_SYSTEM_PROMPT,
     API_KEY, 
     BASE_URL, 
-    MODEL
+    MODEL,
+    config
 )
 
 logger = logging.getLogger("QuickModelManager")
@@ -464,7 +465,7 @@ class QuickModelManager:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=self.config["temperature"],
-                    max_tokens=self.config["max_tokens"]
+                    max_tokens=config.api.max_tokens
                 ),
                 timeout=self.config["timeout"]
             )
@@ -495,7 +496,7 @@ class QuickModelManager:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=1024
+                max_tokens=config.api.max_tokens
             )
             
             return response.choices[0].message.content
@@ -511,7 +512,7 @@ class QuickModelManager:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.1,
-                    max_tokens=1024
+                    max_tokens=config.api.max_tokens
                 )
                 return response.choices[0].message.content
             else:

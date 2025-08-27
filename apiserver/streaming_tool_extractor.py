@@ -9,7 +9,20 @@ import re
 import json
 import logging
 import asyncio
+import sys
+import os
 from typing import Callable, Optional, Dict, Any, Union
+
+# 添加项目根目录到Python路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from config import config, AI_NAME  # 导入配置系统
+except ImportError:
+    # 如果直接导入失败，尝试从父目录导入
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from config import config, AI_NAME
+
 from .tool_call_utils import parse_tool_calls, execute_tool_calls
 
 logger = logging.getLogger("StreamingToolCallExtractor")
@@ -213,7 +226,7 @@ class StreamingToolCallExtractor:
                         logger.error(f"发送工具调用检测信号失败: {e}")
                 
                 # 返回工具调用检测提示 - 使用HTML格式与普通消息保持一致
-                return ("娜迦", f"<span style='color:#888;font-size:14pt;font-family:Lucida Console;'>🔧 检测到工具调用，正在执行...</span>")
+                return (AI_NAME, f"<span style='color:#888;font-size:14pt;font-family:Lucida Console;'>🔧 检测到工具调用，正在执行...</span>")
             else:
                 logger.warning("工具调用解析失败")
                 

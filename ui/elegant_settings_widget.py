@@ -16,7 +16,7 @@ import json
 # 添加项目根目录到path，以便导入配置
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/..'))
 
-from config import config
+from config import config, AI_NAME
 
 class SettingCard(QWidget):
     """单个设置卡片"""
@@ -365,7 +365,7 @@ class ElegantSettingsWidget(QWidget):
         # Max Tokens
         if hasattr(config.api, "max_tokens"):
             max_tokens_spin = QSpinBox()
-            max_tokens_spin.setRange(100, 8000)
+            max_tokens_spin.setRange(100, 32768)
             max_tokens_spin.setValue(config.api.max_tokens)
             max_tokens_spin.setStyleSheet(self.get_spin_style() + "color: #fff;")
             max_tokens_card = SettingCard("最大Token数", "单次对话的最大长度限制", max_tokens_spin, "api.max_tokens")
@@ -394,6 +394,27 @@ class ElegantSettingsWidget(QWidget):
             history_card.value_changed.connect(self.on_setting_changed)
             group.add_card(history_card)
             self.history_spin = history_spin
+        
+        # 持久化上下文设置
+        if hasattr(config.api, "persistent_context"):
+            persistent_context_checkbox = QCheckBox()
+            persistent_context_checkbox.setChecked(config.api.persistent_context)
+            persistent_context_checkbox.setStyleSheet(self.get_checkbox_style() + "color: #fff;")
+            persistent_context_card = SettingCard("持久化上下文", "重启后自动从日志文件加载历史对话上下文", persistent_context_checkbox, "api.persistent_context")
+            persistent_context_card.value_changed.connect(self.on_setting_changed)
+            group.add_card(persistent_context_card)
+            self.persistent_context_checkbox = persistent_context_checkbox
+        
+        # 加载天数设置
+        if hasattr(config.api, "context_load_days"):
+            context_days_spin = QSpinBox()
+            context_days_spin.setRange(1, 30)
+            context_days_spin.setValue(config.api.context_load_days)
+            context_days_spin.setStyleSheet(self.get_spin_style() + "color: #fff;")
+            context_days_card = SettingCard("加载天数", "从最近几天的日志文件中加载历史对话", context_days_spin, "api.context_load_days")
+            context_days_card.value_changed.connect(self.on_setting_changed)
+            group.add_card(context_days_card)
+            self.context_days_spin = context_days_spin
         parent_layout.addWidget(group)
 
     def create_system_group(self, parent_layout):

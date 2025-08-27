@@ -49,7 +49,7 @@ def query_knowledge(user_question):
         "messages": [
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 150,
+                    "max_tokens": config.api.max_tokens,
         "temperature": 0.5  # 降低温度，提高精准度
     }
     

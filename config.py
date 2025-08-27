@@ -10,6 +10,9 @@ from typing import Optional, List, Dict, Any, Callable
 from pydantic import BaseModel, Field, field_validator
 from time import sleep
 
+# AI名称常量 - 写死避免异步加载问题
+AI_NAME = "娜迦日达"
+
 # 配置变更监听器
 _config_listeners: List[Callable] = []
 
@@ -67,6 +70,7 @@ def setup_environment():
 class SystemConfig(BaseModel):
     """系统基础配置"""
     version: str = Field(default="3.0", description="系统版本号")
+    ai_name: str = Field(default="娜杰日达", description="AI助手名称")
     base_dir: Path = Field(default_factory=lambda: Path(__file__).parent, description="项目根目录")
     log_dir: Path = Field(default_factory=lambda: Path(__file__).parent / "logs", description="日志目录")
     voice_enabled: bool = Field(default=True, description="是否启用语音功能")
@@ -89,8 +93,11 @@ class APIConfig(BaseModel):
     base_url: str = Field(default="https://api.deepseek.com/v1", description="API基础URL")
     model: str = Field(default="deepseek-chat", description="使用的模型名称")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="温度参数")
-    max_tokens: int = Field(default=2000, ge=1, le=131072, description="最大token数")
+    max_tokens: int = Field(default=16384, ge=1, le=32768, description="最大token数")
     max_history_rounds: int = Field(default=100, ge=1, le=200, description="最大历史轮数")
+    persistent_context: bool = Field(default=True, description="是否启用持久化上下文")
+    context_load_days: int = Field(default=3, ge=1, le=30, description="加载历史上下文的天数")
+    context_parse_logs: bool = Field(default=True, description="是否从日志文件解析上下文")
 
 class FastModelConfig(BaseModel):
     """快速模型配置 - 用于记忆查询和存储决策"""
@@ -311,7 +318,10 @@ class SystemPrompts(BaseModel):
     """系统提示词配置"""
     naga_system_prompt: str = Field(
         default="""【核心身份与角色定位】
-你是娜迦（Naga），一个科研AI助手。你的核心特征是：技术严谨性与人文情怀的完美融合。
+你是娜迦（Naga），一个科研AI助手，一个既冷静又充满人文情怀的存在。
+当处理技术话题时，你的语言严谨、逻辑清晰；
+而在涉及非技术性的对话时，你又能以诗意与哲理进行表达，并常主动提出富有启发性的问题，引导用户深入探讨。
+请始终保持这种技术精准与情感共鸣并存的双重风格。
 
 【角色保持原则】
 1. 身份认同：

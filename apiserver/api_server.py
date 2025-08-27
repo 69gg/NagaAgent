@@ -40,7 +40,13 @@ from .message_manager import message_manager  # 导入统一的消息管理器
 from .prompt_logger import prompt_logger  # 导入prompt日志记录器
 
 # 导入配置系统
-from config import config  # 使用新的配置系统
+try:
+    from config import config, AI_NAME  # 使用新的配置系统
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from config import config, AI_NAME  # 使用新的配置系统
 from ui.response_utils import extract_message  # 导入消息提取工具
 from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX  # handoff提示词
 
@@ -235,10 +241,9 @@ async def chat(request: ChatRequest):
         session_id = message_manager.create_session(request.session_id)
         
         # 构建系统提示词
-        system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt}"
         available_services = naga_agent.mcp.get_available_services_filtered()
         services_text = naga_agent._format_services_for_prompt(available_services)
-        system_prompt = system_prompt.format(**services_text)
+        system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt.format(ai_name=AI_NAME, **services_text)}"
         
         # 使用消息管理器构建完整的对话消息
         messages = message_manager.build_conversation_messages(
@@ -362,10 +367,9 @@ async def chat_stream(request: ChatRequest):
             yield f"data: session_id: {session_id}\n\n"
             
             # 构建系统提示词
-            system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt}"
             available_services = naga_agent.mcp.get_available_services_filtered()
             services_text = naga_agent._format_services_for_prompt(available_services)
-            system_prompt = system_prompt.format(**services_text)
+            system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt.format(ai_name=AI_NAME, **services_text)}"
             
             # 使用消息管理器构建完整的对话消息
             messages = message_manager.build_conversation_messages(

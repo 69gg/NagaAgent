@@ -35,7 +35,7 @@ def extract_triples(text):
         "messages": [
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 150,
+        "max_tokens": config.api.max_tokens,
         "temperature": 0.5
     }
 

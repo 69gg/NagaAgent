@@ -11,15 +11,15 @@ from datetime import datetime
 from typing import List, Dict
 
 # 第三方库导入
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 
 # 本地模块导入
 from apiserver.tool_call_utils import tool_call_loop
-from config import config
+from config import config, AI_NAME
 from mcpserver.mcp_manager import get_mcp_manager
 from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
 # from thinking import TreeThinkingEngine
-from thinking.config import COMPLEX_KEYWORDS
+# from thinking.config import COMPLEX_KEYWORDS  # 已废弃，不再使用
 
 # 配置日志系统
 def setup_logging():
@@ -45,6 +45,7 @@ class SystemState:
     _mcp_services_initialized = False
     _voice_enabled_logged = False
     _memory_initialized = False
+    _persistent_context_initialized = False
 
 # GRAG记忆系统导入
 def init_memory_manager():
@@ -77,7 +78,6 @@ class NagaConversation: # 对话主类
         self.mcp = get_mcp_manager()
         self.messages = []
         self.dev_mode = False
-        self.client = OpenAI(api_key=config.api.api_key, base_url=config.api.base_url.rstrip('/') + '/')
         self.async_client = AsyncOpenAI(api_key=config.api.api_key, base_url=config.api.base_url.rstrip('/') + '/')
         
         # 初始化MCP服务系统
@@ -88,6 +88,11 @@ class NagaConversation: # 对话主类
         if self.memory_manager and not SystemState._memory_initialized:
             logger.info("夏园记忆系统已初始化")
             SystemState._memory_initialized = True
+        
+        # 初始化持久化上下文（只在首次初始化时显示日志）
+        if config.api.persistent_context and not SystemState._persistent_context_initialized:
+            self._load_persistent_context()
+            SystemState._persistent_context_initialized = True
         
         # 初始化语音处理系统
         self.voice = None
@@ -122,7 +127,41 @@ class NagaConversation: # 对话主类
         #         logger.warning(f"树状思考系统实例创建失败: {e}")
         #         self.tree_thinking = None
 
-        self.loop = asyncio.get_event_loop()
+        # self.loop = asyncio.get_event_loop()  # 已废弃，不再使用
+
+    def _load_persistent_context(self):
+        """从日志文件加载历史对话上下文"""
+        if not config.api.context_parse_logs:
+            return
+            
+        try:
+            from logs.log_context_parser import get_log_parser
+            parser = get_log_parser()
+            
+            # 计算最大消息数量
+            max_messages = config.api.max_history_rounds * 2
+            
+            # 加载历史对话
+            recent_messages = parser.load_recent_context(
+                days=config.api.context_load_days,
+                max_messages=max_messages
+            )
+            
+            if recent_messages:
+                self.messages = recent_messages
+                logger.info(f"✅ 从日志文件加载了 {len(self.messages)} 条历史对话")
+                
+                # 显示统计信息
+                stats = parser.get_context_statistics(config.api.context_load_days)
+                logger.info(f"📊 上下文统计: {stats['total_files']}个文件, {stats['total_messages']}条消息")
+            else:
+                logger.info("📝 未找到历史对话记录，将开始新的对话")
+                
+        except ImportError:
+            logger.warning("⚠️ 日志解析器模块未找到，跳过持久化上下文加载")
+        except Exception as e:
+            logger.error(f"❌ 加载持久化上下文失败: {e}")
+            # 失败时不影响正常使用，继续使用空上下文
 
     def _init_mcp_services(self):
         """初始化MCP服务系统（只在首次初始化时输出日志，后续静默）"""
@@ -294,78 +333,19 @@ class NagaConversation: # 对话主类
         try:
             with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(f"[{t}] 用户: {u}\n")
-                f.write(f"[{t}] 娜迦: {a}\n")
+                f.write(f"[{t}] {AI_NAME}: {a}\n")
                 f.write("-" * 50 + "\n")
         except Exception as e:
             logger.error(f"保存日志失败: {e}")
     
-    def add_message(self, role: str, content: str):
-        """添加消息到对话历史"""
-        self.messages.append({"role": role, "content": content})
-        
-        # 限制历史消息数量，避免内存泄漏
-        max_messages = config.api.max_history_rounds * 2  # 每轮对话包含用户和助手各一条消息
-        if len(self.messages) > max_messages:
-            self.messages = self.messages[-max_messages:]
+    # 已废弃的方法 - 统一使用message_manager进行消息管理
+    # def add_message(self, role: str, content: str):
+    #     """添加消息到对话历史 - 已废弃，使用message_manager"""
+    #     pass
 
-    async def _call_llm(self, messages: List[Dict], use_stream: bool = None) -> Dict:
-        """调用LLM API - 统一使用流式处理"""
-        try:
-            resp = await self.async_client.chat.completions.create(
-                model=config.api.model, 
-                messages=messages, 
-                temperature=config.api.temperature, 
-                max_tokens=config.api.max_tokens, 
-                stream=True  # 统一使用流式
-            )
-            
-            # 流式响应处理
-            content = ""
-            async for chunk in resp:
-                # 安全检查：确保chunk.choices不为空且有内容
-                if (chunk.choices and 
-                    len(chunk.choices) > 0 and 
-                    hasattr(chunk.choices[0], 'delta') and 
-                    chunk.choices[0].delta.content):
-                    content += chunk.choices[0].delta.content
-            return {
-                'content': content,
-                'status': 'success'
-            }
-        except RuntimeError as e:
-            if "handler is closed" in str(e):
-                logger.debug(f"忽略连接关闭异常: {e}")
-                # 重新创建客户端并重试
-                self.async_client = AsyncOpenAI(api_key=config.api.api_key, base_url=config.api.base_url.rstrip('/') + '/')
-                resp = await self.async_client.chat.completions.create(
-                    model=config.api.model, 
-                    messages=messages, 
-                    temperature=config.api.temperature, 
-                    max_tokens=config.api.max_tokens, 
-                    stream=True
-                )
-                
-                # 流式响应处理
-                content = ""
-                async for chunk in resp:
-                    # 安全检查：确保chunk.choices不为空且有内容
-                    if (chunk.choices and 
-                        len(chunk.choices) > 0 and 
-                        hasattr(chunk.choices[0], 'delta') and 
-                        chunk.choices[0].delta.content):
-                        content += chunk.choices[0].delta.content
-                return {
-                    'content': content,
-                    'status': 'success'
-                }
-            else:
-                raise
-        except Exception as e:
-            logger.error(f"LLM API调用失败: {e}")
-            return {
-                'content': f"API调用失败: {str(e)}",
-                'status': 'error'
-            }
+    # async def _call_llm(self, messages: List[Dict], use_stream: bool = None) -> Dict:
+    #     """调用LLM API - 已废弃，直接使用async_client"""
+    #     pass
 
     # 工具调用循环相关方法 - 已废弃，使用流式工具调用提取器替代
     # def handle_llm_response(self, a, mcp):
@@ -502,7 +482,7 @@ class NagaConversation: # 对话主类
             if u.strip().lower() == "#devmode":
                 self.dev_mode = not self.dev_mode  # 切换模式
                 status = "进入" if self.dev_mode else "退出"
-                yield ("娜迦", f"已{status}开发者模式")
+                yield (AI_NAME, f"已{status}开发者模式")
                 return
 
             # 只在语音输入时显示处理提示
@@ -535,12 +515,17 @@ class NagaConversation: # 对话主类
             available_services = self.mcp.get_available_services_filtered()
             services_text = self._format_services_for_prompt(available_services)
             
-            # 简化的消息拼接逻辑（UI界面使用）
-            sysmsg = {"role": "system", "content": system_prompt.format(**services_text)}
-            msgs = [sysmsg] if sysmsg else []
-            # 使用配置文件中的历史轮数设置
-            max_history_messages = config.api.max_history_rounds * 2  # 每轮对话包含用户和助手各一条消息
-            msgs += self.messages[-max_history_messages:] + [{"role": "user", "content": u}]
+            # 添加handoff提示词 - 先获取服务信息再格式化
+            system_prompt = f"{RECOMMENDED_PROMPT_PREFIX}\n{config.prompts.naga_system_prompt.format(ai_name=AI_NAME, **services_text)}"
+            
+            # 使用消息管理器统一的消息拼接逻辑（UI界面使用）
+            from apiserver.message_manager import message_manager
+            msgs = message_manager.build_conversation_messages_from_memory(
+                memory_messages=self.messages,
+                system_prompt=system_prompt,
+                current_message=u,
+                max_history_rounds=config.api.max_history_rounds
+            )
 
             print(f"GTP请求发送：{now()}")  # AI请求前
             
@@ -570,7 +555,7 @@ class NagaConversation: # 对话主类
                     if chunk_type == "chunk":
                         nonlocal display_text
                         display_text += text
-                        return ("娜迦", text)
+                        return (AI_NAME, text)
                     return None
                 
                 def on_sentence(sentence: str, sentence_type: str):
@@ -619,7 +604,7 @@ class NagaConversation: # 对话主类
                                 if isinstance(result, tuple) and len(result) == 2:
                                     yield result
                                 elif isinstance(result, str):
-                                    yield ("娜迦", result)
+                                    yield (AI_NAME, result)
                 
                 # 完成处理
                 final_results = await tool_extractor.finish_processing()
@@ -628,7 +613,7 @@ class NagaConversation: # 对话主类
                         if isinstance(result, tuple) and len(result) == 2:
                             yield result
                         elif isinstance(result, str):
-                            yield ("娜迦", result)
+                            yield (AI_NAME, result)
                 
                 # 检查是否有工具调用需要处理
                 if not tool_calls_queue.empty():
@@ -645,9 +630,13 @@ class NagaConversation: # 对话主类
                         # 有工具执行结果，让LLM继续处理
                         tool_results = result['content']
                         
-                        # 构建包含工具结果的消息
-                        tool_messages = self.messages.copy()
-                        tool_messages.append({"role": "user", "content": f"工具执行结果：{tool_results}"})
+                        # 构建包含工具结果的消息（使用统一的消息拼接逻辑）
+                        tool_messages = message_manager.build_conversation_messages_from_memory(
+                            memory_messages=self.messages,
+                            system_prompt=system_prompt,
+                            current_message=f"工具执行结果：{tool_results}",
+                            max_history_rounds=config.api.max_history_rounds
+                        )
                         
                         # 调用LLM继续处理工具结果
                         try:
@@ -674,7 +663,7 @@ class NagaConversation: # 对话主类
                                             if isinstance(result, tuple) and len(result) == 2:
                                                 yield result
                                             elif isinstance(result, str):
-                                                yield ("娜迦", result)
+                                                yield (AI_NAME, result)
                                     
                                     # 注意：文本内容通过 on_text_chunk 回调函数已经累积到 display_text 中
                         except Exception as e:
@@ -687,7 +676,7 @@ class NagaConversation: # 对话主类
                         if isinstance(result, tuple) and len(result) == 2:
                             yield result
                         elif isinstance(result, str):
-                            yield ("娜迦", result)
+                            yield (AI_NAME, result)
                 
                 # 保存对话历史（使用前端显示的纯文本）
                 print(f"[DEBUG] 最终display_text长度: {len(display_text)}")
@@ -745,7 +734,7 @@ class NagaConversation: # 对话主类
                 
             except Exception as e:
                 print(f"工具调用循环失败: {e}")
-                yield ("娜迦", f"[MCP异常]: {e}")
+                yield (AI_NAME, f"[MCP异常]: {e}")
                 return
 
             return
@@ -753,7 +742,7 @@ class NagaConversation: # 对话主类
             import sys
             import traceback
             traceback.print_exc(file=sys.stderr)
-            yield ("娜迦", f"[MCP异常]: {e}")
+            yield (AI_NAME, f"[MCP异常]: {e}")
             return
 
     async def _background_memory_storage(self, user_question: str, ai_response: str) -> None:

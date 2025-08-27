@@ -9,7 +9,7 @@ from .quintuple_graph import store_quintuples, query_graph_by_keywords, get_all_
 from .quintuple_rag_query import query_knowledge, query_knowledge_with_keywords, set_context
 from .memory_decision import memory_decision_maker
 from .task_manager import task_manager, start_auto_cleanup, start_task_manager
-from config import config
+from config import config, AI_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class GRAGMemoryManager:
             return False
         try:
             # 拼接本轮内容
-            conversation_text = f"用户: {user_input}\n娜迦: {ai_response}"
+            conversation_text = f"用户: {user_input}\n{AI_NAME}: {ai_response}"
             logger.info(f"添加对话记忆: {conversation_text[:50]}...")
 
             # 更新recent_context（限制长度）

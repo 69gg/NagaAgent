@@ -21,7 +21,10 @@
     "model": " ",
     "temperature": 0.7,
     "max_tokens": 16384,
-    "max_history_rounds": 20
+    "max_history_rounds": 20,
+    "persistent_context": true,
+    "context_load_days": 3,
+    "context_parse_logs": true
   },
   "api_server": {
     "enabled": true,

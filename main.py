@@ -12,7 +12,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
 
 # 本地模块导入
-from config import config
+from config import config, AI_NAME
 from conversation_core import NagaConversation
 from summer_memory.memory_manager import memory_manager
 from summer_memory.task_manager import start_task_manager, task_manager
@@ -216,8 +216,8 @@ if memory_manager.enabled:
     from summer_memory.quintuple_graph import graph, GRAG_ENABLED
     print(f"Neo4j连接: {'成功' if graph and GRAG_ENABLED else '失败'}")
 print("=" * 30)
-
-print('=' * 30 + '\n娜迦系统已启动\n' + '=' * 30)
+print(f'{AI_NAME}系统已启动')
+print("=" * 30)
 
 # 启动服务
 if config.api_server.enabled and config.api_server.auto_start:
@@ -239,7 +239,7 @@ class NagaAgentAdapter:
     
     async def respond_stream(s, txt):
         async for resp in s.naga.process(txt):
-            yield "娜迦", resp, None, True, False
+            yield AI_NAME, resp, None, True, False
 
 # 主程序入口
 if __name__ == "__main__":
