@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def run_tests():
     """运行所有测试"""
-    print("🧪 开始运行应用启动器测试套件...")
+    print("开始运行应用启动器测试套件...")
     print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     
@@ -26,7 +26,7 @@ def run_tests():
     
     # 输出总结
     print("\n" + "=" * 60)
-    print("📊 测试结果总结:")
+    print("测试结果总结:")
     print(f"总测试数: {result.testsRun}")
     print(f"成功: {result.testsRun - len(result.failures) - len(result.errors)}")
     print(f"失败: {len(result.failures)}")
@@ -34,25 +34,25 @@ def run_tests():
     print(f"耗时: {time.time() - start_time:.2f} 秒")
     
     if result.failures:
-        print("\n❌ 失败的测试:")
+        print("\n失败的测试:")
         for test, traceback in result.failures:
             print(f"  - {test}")
     
     if result.errors:
-        print("\n💥 错误的测试:")
+        print("\n错误的测试:")
         for test, traceback in result.errors:
             print(f"  - {test}")
     
     if result.wasSuccessful():
-        print("\n✅ 所有测试通过！代码质量良好。")
+        print("\n所有测试通过！代码质量良好。")
         return 0
     else:
-        print("\n❌ 存在失败的测试，请检查代码。")
+        print("\n存在失败的测试，请检查代码。")
         return 1
 
 def run_individual_test(test_module):
     """运行单个测试模块"""
-    print(f"🧪 运行测试模块: {test_module}")
+    print(f"运行测试模块: {test_module}")
     
     try:
         # 导入测试模块
@@ -68,7 +68,7 @@ def run_individual_test(test_module):
         return 0 if result.wasSuccessful() else 1
         
     except ImportError as e:
-        print(f"❌ 无法导入测试模块 {test_module}: {e}")
+        print(f"无法导入测试模块 {test_module}: {e}")
         return 1
 
 if __name__ == "__main__":

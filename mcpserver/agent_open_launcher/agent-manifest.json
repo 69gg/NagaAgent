@@ -1,38 +1,83 @@
 {
-  "name": "应用启动服务",
-  "displayName": "应用启动服务",
-  "version": "2.2.0",
-  "description": "智能获取应用列表并启动指定应用",
-  "author": "NagaAgent",
+  "name": "跨平台应用启动服务",
+  "displayName": "Cross-Platform App Launcher Service",
+  "version": "3.1.0",
+  "description": "智能获取应用列表并启动指定应用 - 跨平台版，支持Windows、Linux和macOS",
+  "author": "pyl(1708213363@qq.com)",
   "agentType": "mcp",
   "entryPoint": {
-    "module": "mcpserver.agent_open_launcher.agent_app_launcher",
-    "class": "AppLauncherAgent"
+    "module": "mcpserver.agent_open_launcher.cross_platform_launcher_agent",
+    "class": "CrossPlatformLauncherAgent"
   },
   "factory": {
-    "create_instance": "create_app_launcher_agent",
+    "create_instance": "create_cross_platform_launcher_agent",
     "validate_config": "validate_agent_config",
     "get_dependencies": "get_agent_dependencies"
   },
   "communication": {
     "protocol": "stdio",
-    "timeout": 15000
+    "timeout": 30000
   },
   "capabilities": {
     "invocationCommands": [
       {
         "command": "启动应用",
-        "description": "智能应用启动工具。两轮交互：1)第一轮调用获取应用列表，2)第二轮提供应用名称启动应用。",
+        "description": "智能应用启动工具。支持两轮交互：1)第一轮调用获取应用列表，2)第二轮提供应用名称启动应用。支持启动参数和管理员权限。",
         "example": "{\"tool_name\":\"启动应用\"}"
+      },
+      {
+        "command": "获取应用列表",
+        "description": "获取系统中所有可用的应用列表",
+        "example": "{\"tool_name\":\"获取应用列表\"}"
+      },
+      {
+        "command": "终止应用",
+        "description": "终止正在运行的应用程序",
+        "example": "{\"tool_name\":\"终止应用\",\"app\":\"Chrome\"}"
+      },
+      {
+        "command": "获取运行中的应用",
+        "description": "获取当前正在运行的应用程序列表",
+        "example": "{\"tool_name\":\"获取运行中的应用\"}"
+      },
+      {
+        "command": "刷新应用列表",
+        "description": "重新扫描系统并刷新应用列表缓存",
+        "example": "{\"tool_name\":\"刷新应用列表\"}"
+      },
+      {
+        "command": "获取启动历史",
+        "description": "获取应用的启动历史记录",
+        "example": "{\"tool_name\":\"获取启动历史\",\"limit\":10}"
+      },
+      {
+        "command": "获取统计信息",
+        "description": "获取启动器的使用统计和性能信息",
+        "example": "{\"tool_name\":\"获取统计信息\"}"
+      },
+      {
+        "command": "获取平台信息",
+        "description": "获取当前平台信息和支持的功能",
+        "example": "{\"tool_name\":\"获取平台信息\"}"
       }
     ]
   },
   "inputSchema": {
     "type": "object",
     "properties": {
-      "tool_name": {"type": "string", "description": "工具名称：启动应用"},
-      "app": {"type": "string", "description": "应用名称（可选）。第一轮调用时不提供此参数以获取应用列表，第二轮调用时提供从列表中选定的应用名称"},
-      "args": {"type": "string", "description": "启动参数（可选）"}
+      "tool_name": {"type": "string", "description": "工具名称"},
+      "app": {"type": "string", "description": "应用名称（启动/终止应用时需要）"},
+      "args": {"type": "string", "description": "启动参数（可选）"},
+      "options": {
+        "type": "object",
+        "properties": {
+          "elevated": {"type": "boolean", "description": "是否以管理员权限运行"},
+          "working_dir": {"type": "string", "description": "工作目录"},
+          "force_refresh": {"type": "boolean", "description": "是否强制刷新"},
+          "limit": {"type": "integer", "description": "返回结果数量限制"}
+        }
+      },
+      "request_id": {"type": "string", "description": "请求ID（可选）"}
     },
     "required": ["tool_name"]
   },
@@ -42,16 +87,33 @@
       "success": {"type": "boolean", "description": "操作是否成功"},
       "status": {"type": "string", "description": "状态码"},
       "message": {"type": "string", "description": "状态消息"},
+      "request_id": {"type": "string", "description": "请求ID"},
+      "error_code": {"type": "string", "description": "错误代码（失败时）"},
       "data": {"type": "object", "description": "返回数据"}
     }
   },
   "configSchema": {
-    "APP_LAUNCHER_AGENT_CACHE_SIZE": "integer"
+    "DEBUG_MODE": "boolean",
+    "CACHE_ENABLED": "boolean",
+    "CACHE_TTL": "integer",
+    "MAX_APPS_SCAN": "integer",
+    "LAUNCH_TIMEOUT": "integer",
+    "MAX_RETRIES": "integer",
+    "LOG_LEVEL": "string"
   },
+  "dependencies": [
+    "psutil",
+    "pywin32"
+  ],
   "runtime": {
     "instance": null,
     "is_initialized": false,
     "last_used": null,
-    "usage_count": 0
+    "usage_count": 0,
+    "stats": {
+      "total_requests": 0,
+      "successful_requests": 0,
+      "failed_requests": 0
+    }
   }
 } 

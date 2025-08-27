@@ -1,4 +1,4 @@
-# robust_app_launcher_agent.py - 稳健版应用启动Agent
+# cross_platform_launcher_agent.py - 跨平台应用启动Agent
 import os
 import json
 import asyncio
@@ -11,8 +11,9 @@ from typing import Dict, Optional, Any
 # 添加当前目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from enhanced_app_launcher import create_enhanced_launcher, LaunchStatus, LaunchResult
-from enhanced_app_scanner import get_enhanced_scanner
+from cross_platform_app_launcher import create_cross_platform_launcher, LaunchStatus, LaunchResult
+from cross_platform_app_scanner import get_cross_platform_scanner
+from platform_utils import get_platform_utils, OperatingSystem
 
 # 配置日志
 logging.basicConfig(
@@ -21,30 +22,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class RobustAppLauncherAgent:
-    """稳健版应用启动Agent - 提供可靠的应用启动服务和详细的调试信息"""
+class CrossPlatformLauncherAgent:
+    """跨平台应用启动Agent - 支持Windows、Linux和macOS"""
     
-    name = "Robust AppLauncher Agent"
-    version = "3.0.0"
+    name = "CrossPlatform App Launcher Agent"
+    version = "3.1.0"
     
     def __init__(self, config: Dict = None):
         """初始化Agent"""
         self.config = config or self._load_config()
-        self.launcher = create_enhanced_launcher(self.config)
-        self.scanner = get_enhanced_scanner(self.config)
+        self.platform = get_platform_utils()
+        self.launcher = create_cross_platform_launcher(self.config)
+        self.scanner = get_cross_platform_scanner(self.config)
         self.initialized = False
         self.stats = {
             "total_requests": 0,
             "successful_requests": 0,
             "failed_requests": 0,
             "last_error": None,
-            "startup_time": None
+            "startup_time": None,
+            "platform": self.platform.os_type.value
         }
         
         # 初始化日志
         self._setup_logging()
         
-        logger.info(f"✅ {self.name} v{self.version} 初始化完成")
+        logger.info(f"✅ {self.name} v{self.version} 初始化完成 (平台: {self.platform.os_type.value})")
     
     def _load_config(self) -> Dict:
         """加载配置"""
@@ -79,7 +82,21 @@ class RobustAppLauncherAgent:
             "check_already_running": True,
             "monitor_processes": True,
             "max_retries": 3,
-            "log_level": "INFO"
+            "log_level": "INFO",
+            # 平台特定默认值
+            "platform_config": {
+                "windows": {
+                    "scan_registry": True,
+                    "scan_shortcuts": True
+                },
+                "linux": {
+                    "scan_desktop_entries": True,
+                    "scan_bin_directories": True
+                },
+                "macos": {
+                    "scan_applications": True
+                }
+            }
         }
         
         # 合并配置
@@ -206,6 +223,8 @@ class RobustAppLauncherAgent:
             return await self._handle_get_launch_history(data, request_id)
         elif tool_name == "获取统计信息":
             return await self._handle_get_stats(data, request_id)
+        elif tool_name == "获取平台信息":
+            return await self._handle_get_platform_info(data, request_id)
         else:
             return {
                 "success": False,
@@ -242,6 +261,7 @@ class RobustAppLauncherAgent:
                         "process_id": status.process_id,
                         "start_time": status.start_time,
                         "launch_method": status.launch_method,
+                        "platform": self.platform.os_type.value,
                         "duration": time.time() - status.start_time if status.start_time else 0
                     }
                 }
@@ -255,6 +275,7 @@ class RobustAppLauncherAgent:
                         "app_name": status.app_name,
                         "error_code": status.error_code,
                         "error_details": status.error_details,
+                        "platform": self.platform.os_type.value,
                         "suggestion": self._get_error_suggestion(status.result)
                     }
                 }
@@ -270,6 +291,7 @@ class RobustAppLauncherAgent:
                 "request_id": request_id,
                 "data": {
                     "app_name": app_name,
+                    "platform": self.platform.os_type.value,
                     "error_details": traceback.format_exc() if self.config.get("debug_mode") else None
                 }
             }
@@ -291,6 +313,7 @@ class RobustAppLauncherAgent:
                     "total_count": app_info["total_count"],
                     "apps": app_info["apps"][:limit],
                     "has_more": len(app_info["apps"]) > limit,
+                    "platform": self.platform.os_type.value,
                     "scan_stats": app_info.get("scan_stats", {}),
                     "last_updated": datetime.now().isoformat()
                 }
@@ -305,9 +328,60 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"获取应用列表失败: {str(e)}",
                 "request_id": request_id,
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
+            }
+    
+    async def _handle_get_platform_info(self, data: Dict, request_id: str) -> Dict:
+        """处理获取平台信息请求"""
+        try:
+            platform_info = {
+                "os": self.platform.os_type.value,
+                "os_version": platform.platform(),
+                "architecture": platform.machine(),
+                "python_version": platform.python_version(),
+                "home_directory": str(self.platform.home_dir),
+                "config_dirs": {k: str(v) for k, v in self.platform.config_dirs.items()},
+                "app_dirs": {k: [str(d) for d in v] for k, v in self.platform.app_dirs.items()},
+                "executable_extensions": self.platform.get_executable_extensions(),
+                "supported_features": self._get_supported_features()
+            }
+            
+            response = {
+                "success": True,
+                "status": "platform_info",
+                "message": f"✅ 平台信息: {self.platform.os_type.value}",
+                "request_id": request_id,
+                "data": platform_info
+            }
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"获取平台信息失败: {e}")
+            return {
+                "success": False,
+                "status": "error",
+                "message": f"获取平台信息失败: {str(e)}",
+                "request_id": request_id,
                 "data": {}
             }
     
+    def _get_supported_features(self) -> List[str]:
+        """获取支持的功能列表"""
+        features = ["应用扫描", "应用启动", "进程监控"]
+        
+        if self.platform.os_type == OperatingSystem.WINDOWS:
+            features.extend(["注册表扫描", "快捷方式支持", "权限提升"])
+        elif self.platform.os_type == OperatingSystem.LINUX:
+            features.extend(["Desktop条目", "PATH扫描", "信号控制"])
+        elif self.platform.os_type == OperatingSystem.MACOS:
+            features.extend(["App包支持", "plist解析", "open命令"])
+        
+        return features
+    
+    # ... 其他处理方法与robust_app_launcher_agent.py相同 ...
     async def _handle_terminate_app(self, data: Dict, request_id: str) -> Dict:
         """处理终止应用请求"""
         app_name = data.get("app")
@@ -331,6 +405,7 @@ class RobustAppLauncherAgent:
                 "request_id": request_id,
                 "data": {
                     "app_name": status.app_name,
+                    "platform": self.platform.os_type.value,
                     "error_details": status.error_details
                 }
             }
@@ -344,7 +419,9 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"终止应用失败: {str(e)}",
                 "request_id": request_id,
-                "data": {}
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
             }
     
     async def _handle_get_running_apps(self, data: Dict, request_id: str) -> Dict:
@@ -359,7 +436,8 @@ class RobustAppLauncherAgent:
                 "request_id": request_id,
                 "data": {
                     "running_apps": running_apps,
-                    "total_count": len(running_apps)
+                    "total_count": len(running_apps),
+                    "platform": self.platform.os_type.value
                 }
             }
             
@@ -372,7 +450,9 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"获取运行应用失败: {str(e)}",
                 "request_id": request_id,
-                "data": {}
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
             }
     
     async def _handle_refresh_apps(self, data: Dict, request_id: str) -> Dict:
@@ -387,6 +467,7 @@ class RobustAppLauncherAgent:
                 "request_id": request_id,
                 "data": {
                     "refresh_time": datetime.now().isoformat(),
+                    "platform": self.platform.os_type.value,
                     "scan_stats": self.scanner.get_scan_stats()
                 }
             }
@@ -400,7 +481,9 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"刷新应用列表失败: {str(e)}",
                 "request_id": request_id,
-                "data": {}
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
             }
     
     async def _handle_get_launch_history(self, data: Dict, request_id: str) -> Dict:
@@ -417,7 +500,8 @@ class RobustAppLauncherAgent:
                 "request_id": request_id,
                 "data": {
                     "history": history,
-                    "total_records": len(self.launcher.launch_history)
+                    "total_records": len(self.launcher.launch_history),
+                    "platform": self.platform.os_type.value
                 }
             }
             
@@ -430,7 +514,9 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"获取启动历史失败: {str(e)}",
                 "request_id": request_id,
-                "data": {}
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
             }
     
     async def _handle_get_stats(self, data: Dict, request_id: str) -> Dict:
@@ -446,6 +532,7 @@ class RobustAppLauncherAgent:
                 "data": {
                     "agent_stats": self.stats,
                     "launcher_stats": launcher_stats,
+                    "platform": self.platform.os_type.value,
                     "uptime": (datetime.now() - self.stats["startup_time"]).total_seconds() 
                               if self.stats["startup_time"] else 0
                 }
@@ -460,7 +547,9 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"获取统计信息失败: {str(e)}",
                 "request_id": request_id,
-                "data": {}
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
             }
     
     async def _get_app_list_for_selection(self, request_id: str) -> Dict:
@@ -477,6 +566,7 @@ class RobustAppLauncherAgent:
                     "total_count": app_info["total_count"],
                     "apps": app_info["apps"][:50],  # 限制显示数量
                     "has_more": len(app_info["apps"]) > 50,
+                    "platform": self.platform.os_type.value,
                     "usage_format": {
                         "tool_name": "启动应用",
                         "app": "应用名称（必填，从上述列表中选择）",
@@ -491,7 +581,7 @@ class RobustAppLauncherAgent:
                         "app": "Chrome",
                         "args": "--incognito",
                         "options": {
-                            "elevated": false
+                            "elevated": False
                         }
                     }
                 }
@@ -506,7 +596,9 @@ class RobustAppLauncherAgent:
                 "status": "error",
                 "message": f"获取应用列表失败: {str(e)}",
                 "request_id": request_id,
-                "data": {}
+                "data": {
+                    "platform": self.platform.os_type.value
+                }
             }
     
     def _get_error_suggestion(self, result: LaunchResult) -> str:
@@ -517,6 +609,7 @@ class RobustAppLauncherAgent:
             LaunchResult.ACCESS_DENIED: "尝试以管理员权限运行应用",
             LaunchResult.INVALID_PATH: "应用文件可能已损坏或被移动，请重新安装应用",
             LaunchResult.TIMEOUT: "应用启动超时，请稍后重试或检查系统资源",
+            LaunchResult.UNSUPPORTED_PLATFORM: "当前平台不支持该应用或功能",
             LaunchResult.FAILED: "启动失败，请检查系统日志或重启后重试"
         }
         return suggestions.get(result, "请重试或联系技术支持")
@@ -530,7 +623,9 @@ class RobustAppLauncherAgent:
             "message": message,
             "request_id": request_id,
             "error_code": error_code,
-            "data": {}
+            "data": {
+                "platform": self.platform.os_type.value
+            }
         }
         
         if details and self.config.get("debug_mode"):
@@ -554,9 +649,9 @@ class RobustAppLauncherAgent:
         logger.info("✅ Agent已关闭")
 
 # 工厂函数
-def create_robust_app_launcher_agent(config: Dict = None) -> RobustAppLauncherAgent:
-    """创建稳健版应用启动Agent实例"""
-    return RobustAppLauncherAgent(config)
+def create_cross_platform_launcher_agent(config: Dict = None) -> CrossPlatformLauncherAgent:
+    """创建跨平台应用启动Agent实例"""
+    return CrossPlatformLauncherAgent(config)
 
 def get_agent_metadata() -> Dict:
     """获取Agent元数据"""
@@ -574,14 +669,21 @@ def validate_agent_config(config: Dict) -> bool:
 
 def get_agent_dependencies() -> List[str]:
     """获取Agent依赖"""
-    return [
-        "psutil",
-        "pywin32",
-        "win32api",
-        "win32con",
-        "win32event",
-        "win32com"
+    deps = [
+        "psutil"
     ]
+    
+    # 平台特定依赖
+    platform_utils = get_platform_utils()
+    if platform_utils.os_type == OperatingSystem.WINDOWS:
+        deps.extend(["pywin32", "win32api", "win32con", "win32event", "win32com"])
+    elif platform_utils.os_type == OperatingSystem.LINUX:
+        deps.extend(["dbus-python"])  # 可选，用于某些Linux功能
+    elif platform_utils.os_type == OperatingSystem.MACOS:
+        deps.extend(["pyobjc"])  # 可选，用于某些macOS功能
+    
+    return deps
 
-# 导入time（之前忘记导入了）
+# 导入必要的模块
+import platform
 import time

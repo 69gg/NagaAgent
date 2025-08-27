@@ -1,4 +1,4 @@
-# enhanced_app_launcher.py - 增强版应用启动器
+# cross_platform_app_launcher.py - 跨平台应用启动器
 import os
 import subprocess
 import asyncio
@@ -6,10 +6,7 @@ import json
 import sys
 import time
 import logging
-import psutil
-import win32api
-import win32con
-import win32event
+import signal
 from typing import Dict, Optional, List, Union, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -18,7 +15,8 @@ from pathlib import Path
 # 添加当前目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from enhanced_app_scanner import get_enhanced_scanner, AppInfo, AppSource
+from platform_utils import get_platform_utils, OperatingSystem
+from cross_platform_app_scanner import get_cross_platform_scanner, AppInfo, AppSource
 
 # 配置日志
 logging.basicConfig(
@@ -36,6 +34,7 @@ class LaunchResult(Enum):
     ACCESS_DENIED = "access_denied"
     INVALID_PATH = "invalid_path"
     TIMEOUT = "timeout"
+    UNSUPPORTED_PLATFORM = "unsupported_platform"
 
 @dataclass
 class LaunchStatus:
@@ -49,12 +48,13 @@ class LaunchStatus:
     error_details: Optional[str] = None
     launch_method: Optional[str] = None
 
-class EnhancedAppLauncher:
-    """增强版应用启动器 - 提供稳定的应用启动功能和详细的错误处理"""
+class CrossPlatformAppLauncher:
+    """跨平台应用启动器"""
     
     def __init__(self, config: Dict = None):
         self.config = config or self._load_default_config()
-        self.scanner = get_enhanced_scanner(self.config)
+        self.platform = get_platform_utils()
+        self.scanner = get_cross_platform_scanner(self.config)
         self.launch_history = []
         self.running_processes = {}
         self._process_monitor_task = None
@@ -66,18 +66,31 @@ class EnhancedAppLauncher:
     def _load_default_config(self) -> Dict:
         """加载默认配置"""
         return {
-            "launch_timeout": 30,  # 启动超时时间（秒）
-            "wait_for_startup": True,  # 是否等待应用启动
-            "startup_wait_time": 5,  # 启动等待时间
-            "check_already_running": True,  # 检查是否已在运行
-            "elevate_if_needed": False,  # 是否需要提升权限
-            "monitor_processes": True,  # 监控进程
-            "max_retries": 3,  # 最大重试次数
-            "debug_mode": False,  # 调试模式
-            "log_launch_details": True,  # 记录启动详情
-            "validate_executable": True,  # 验证可执行文件
-            "use_shell_execute": False,  # 是否使用shell执行
-            "working_directory": None  # 工作目录
+            "launch_timeout": 30,
+            "wait_for_startup": True,
+            "startup_wait_time": 5,
+            "check_already_running": True,
+            "elevate_if_needed": False,
+            "monitor_processes": True,
+            "max_retries": 3,
+            "debug_mode": False,
+            "log_launch_details": True,
+            "validate_executable": True,
+            "use_shell_execute": False,
+            "working_directory": None,
+            # 平台特定配置
+            "windows": {
+                "use_runas_for_elevation": True,
+                "create_window": True
+            },
+            "linux": {
+                "use_terminal_for_gui": False,
+                "display": None
+            },
+            "macos": {
+                "open_with_open_command": True,
+                "bundle_execution": True
+            }
         }
     
     def _start_process_monitor(self) -> None:
@@ -92,7 +105,7 @@ class EnhancedAppLauncher:
                 # 检查运行的进程
                 dead_processes = []
                 for pid, info in self.running_processes.items():
-                    if not psutil.pid_exists(pid):
+                    if not self._is_process_running(pid):
                         dead_processes.append(pid)
                         logger.info(f"进程 {pid} ({info['name']}) 已退出")
                 
@@ -105,6 +118,24 @@ class EnhancedAppLauncher:
             except Exception as e:
                 logger.error(f"进程监控错误: {e}")
                 await asyncio.sleep(10)
+    
+    def _is_process_running(self, pid: int) -> bool:
+        """检查进程是否在运行"""
+        try:
+            if self.platform.os_type == OperatingSystem.WINDOWS:
+                import win32api
+                import win32con
+                handle = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION, False, pid)
+                if handle:
+                    win32api.CloseHandle(handle)
+                    return True
+            else:
+                # Unix-like系统
+                os.kill(pid, 0)  # 发送信号0检查进程是否存在
+                return True
+        except:
+            return False
+        return False
     
     async def launch_app(self, app_name: str, args: Union[str, List[str]] = None, 
                         options: Dict = None) -> LaunchStatus:
@@ -148,52 +179,43 @@ class EnhancedAppLauncher:
         # 准备启动参数
         launch_args = self._prepare_launch_args(app_info, args, options)
         
-        # 尝试启动
-        retry_count = 0
-        last_error = None
-        
-        while retry_count < self.config["max_retries"]:
-            try:
-                logger.debug(f"尝试启动 {app_info.display_name} (第 {retry_count + 1} 次)")
-                
-                # 根据来源选择启动方式
-                if app_info.source in [AppSource.SHORTCUT_START_MENU, 
-                                     AppSource.SHORTCUT_DESKTOP, 
-                                     AppSource.SHORTCUT_COMMON]:
-                    status = await self._launch_via_shortcut(app_info, launch_args)
-                else:
-                    status = await self._launch_via_executable(app_info, launch_args)
-                
-                # 记录启动历史
-                self._record_launch(app_info, status, start_time)
-                
-                # 如果成功或不是临时错误，返回结果
-                if status.result == LaunchResult.SUCCESS:
-                    # 监控新进程
-                    if status.process_id and self.config["monitor_processes"]:
-                        self.running_processes[status.process_id] = {
-                            "name": app_info.display_name,
-                            "path": app_info.path,
-                            "start_time": time.time()
-                        }
-                
-                return status
-                
-            except Exception as e:
-                last_error = e
-                retry_count += 1
-                logger.warning(f"启动失败 (尝试 {retry_count}/{self.config['max_retries']}): {e}")
-                
-                if retry_count < self.config["max_retries"]:
-                    await asyncio.sleep(1)  # 等待后重试
-        
-        # 所有重试都失败
-        return LaunchStatus(
-            result=LaunchResult.FAILED,
-            message=f"启动应用失败，已重试 {self.config['max_retries']} 次",
-            app_name=app_info.display_name,
-            error_details=str(last_error)
-        )
+        # 根据平台选择启动方式
+        try:
+            if self.platform.os_type == OperatingSystem.WINDOWS:
+                status = await self._launch_windows_app(app_info, launch_args)
+            elif self.platform.os_type == OperatingSystem.LINUX:
+                status = await self._launch_linux_app(app_info, launch_args)
+            elif self.platform.os_type == OperatingSystem.MACOS:
+                status = await self._launch_macos_app(app_info, launch_args)
+            else:
+                status = LaunchStatus(
+                    result=LaunchResult.UNSUPPORTED_PLATFORM,
+                    message=f"不支持的平台: {self.platform.os_type.value}",
+                    app_name=app_info.display_name
+                )
+            
+            # 记录启动历史
+            self._record_launch(app_info, status, start_time)
+            
+            # 如果成功，监控新进程
+            if status.result == LaunchResult.SUCCESS and status.process_id:
+                if self.config["monitor_processes"]:
+                    self.running_processes[status.process_id] = {
+                        "name": app_info.display_name,
+                        "path": app_info.path,
+                        "start_time": time.time()
+                    }
+            
+            return status
+            
+        except Exception as e:
+            logger.error(f"启动应用异常: {e}")
+            return LaunchStatus(
+                result=LaunchResult.FAILED,
+                message=f"启动应用时发生异常: {str(e)}",
+                app_name=app_info.display_name,
+                error_details=str(e)
+            )
     
     async def _find_app_info(self, app_name: str) -> Optional[AppInfo]:
         """查找应用信息"""
@@ -217,13 +239,15 @@ class EnhancedAppLauncher:
             if not os.path.isfile(exe_path):
                 return {"valid": False, "reason": "不是文件", "details": f"路径: {exe_path}"}
             
-            # 检查文件扩展名
-            if not exe_path.lower().endswith('.exe'):
-                return {"valid": False, "reason": "不是可执行文件", "details": f"扩展名: {os.path.splitext(exe_path)[1]}"}
-            
-            # 检查文件权限
-            if not os.access(exe_path, os.X_OK):
-                return {"valid": False, "reason": "没有执行权限", "details": f"文件: {exe_path}"}
+            # 平台特定的验证
+            if self.platform.os_type == OperatingSystem.WINDOWS:
+                if not exe_path.lower().endswith(('.exe', '.bat', '.cmd', '.ps1')):
+                    return {"valid": False, "reason": "不是Windows可执行文件", 
+                           "details": f"扩展名: {os.path.splitext(exe_path)[1]}"}
+            else:
+                if not self.platform.is_executable(exe_path):
+                    return {"valid": False, "reason": "文件没有执行权限", 
+                           "details": f"文件: {exe_path}"}
             
             # 检查文件大小
             file_size = os.path.getsize(exe_path)
@@ -238,6 +262,8 @@ class EnhancedAppLauncher:
     async def _check_if_running(self, app_info: AppInfo) -> Optional[int]:
         """检查应用是否已在运行"""
         try:
+            import psutil
+            
             exe_name = os.path.basename(app_info.path).lower()
             
             for proc in psutil.process_iter(['pid', 'name', 'exe']):
@@ -267,8 +293,8 @@ class EnhancedAppLauncher:
             "working_dir": options.get("working_dir") or 
                           (app_info.install_location if app_info.install_location else 
                            os.path.dirname(app_info.path)),
-            "show_cmd": win32con.SW_NORMAL,
-            "elevated": options.get("elevated", self.config["elevate_if_needed"])
+            "elevated": options.get("elevated", self.config["elevate_if_needed"]),
+            "env": os.environ.copy()
         }
         
         # 处理参数
@@ -279,84 +305,57 @@ class EnhancedAppLauncher:
                 launch_args["args"] = args
         
         # 处理快捷方式特定参数
-        if app_info.shortcut_path:
+        if hasattr(app_info, 'shortcut_path') and app_info.shortcut_path:
             launch_args["shortcut_path"] = app_info.shortcut_path
+        
+        # 平台特定处理
+        if self.platform.os_type == OperatingSystem.LINUX:
+            # 设置显示环境变量
+            if options.get("display"):
+                launch_args["env"]["DISPLAY"] = options["display"]
+            elif self.config["linux"]["display"]:
+                launch_args["env"]["DISPLAY"] = self.config["linux"]["display"]
         
         return launch_args
     
-    async def _launch_via_shortcut(self, app_info: AppInfo, launch_args: Dict) -> LaunchStatus:
-        """通过快捷方式启动应用"""
+    async def _launch_windows_app(self, app_info: AppInfo, launch_args: Dict) -> LaunchStatus:
+        """启动Windows应用"""
         try:
-            logger.debug(f"通过快捷方式启动: {app_info.shortcut_path}")
+            logger.debug(f"启动Windows应用: {app_info.path}")
+            
+            # 处理macOS .app文件（如果有的话）
+            if app_info.path.endswith('.app'):
+                return LaunchStatus(
+                    result=LaunchResult.FAILED,
+                    message=f"无法在Windows上运行macOS应用: {app_info.path}",
+                    app_name=app_info.display_name
+                )
             
             # 构建命令
-            cmd = [app_info.shortcut_path]
-            cmd.extend(launch_args["args"])
+            if launch_args["elevated"] and self.config["windows"]["use_runas_for_elevation"]:
+                # 使用runas提升权限
+                cmd = ["runas", "/user:Administrator", f'"{app_info.path}"']
+                if launch_args["args"]:
+                    cmd[-1] += " " + " ".join(f'"{arg}"' for arg in launch_args["args"])
+                shell = True
+            else:
+                cmd = [app_info.path] + launch_args["args"]
+                shell = False
             
             # 启动进程
-            if self.config["use_shell_execute"]:
-                proc = subprocess.Popen(
-                    cmd,
-                    shell=True,
-                    cwd=launch_args["working_dir"],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE
-                )
+            if self.config["windows"]["create_window"]:
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 1  # SW_NORMAL
             else:
-                proc = subprocess.Popen(
-                    cmd,
-                    cwd=launch_args["working_dir"]
-                )
+                startupinfo = None
             
-            # 等待启动
-            if self.config["wait_for_startup"]:
-                await self._wait_for_process_startup(proc, app_info.display_name)
-            
-            return LaunchStatus(
-                result=LaunchResult.SUCCESS,
-                message=f"已通过快捷方式启动应用: {app_info.display_name}",
-                app_name=app_info.display_name,
-                process_id=proc.pid,
-                start_time=time.time(),
-                launch_method="shortcut"
-            )
-            
-        except Exception as e:
-            logger.error(f"快捷方式启动失败: {e}")
-            raise
-    
-    async def _launch_via_executable(self, app_info: AppInfo, launch_args: Dict) -> LaunchStatus:
-        """直接启动可执行文件"""
-        try:
-            logger.debug(f"直接启动可执行文件: {app_info.path}")
-            
-            # 构建命令
-            cmd = [app_info.path]
-            cmd.extend(launch_args["args"])
-            
-            # 准备启动参数
-            startup_info = subprocess.STARTUPINFO()
-            startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startup_info.wShowWindow = launch_args["show_cmd"]
-            
-            # 如果需要提升权限
-            if launch_args["elevated"]:
-                logger.info("请求提升权限启动应用")
-                # 使用ShellExecute来提升权限
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                shell.Run(' '.join(cmd), 1, True)
-                return LaunchStatus(
-                    result=LaunchResult.SUCCESS,
-                    message=f"已以管理员权限启动应用: {app_info.display_name}",
-                    app_name=app_info.display_name,
-                    launch_method="elevated"
-                )
-            
-            # 正常启动
             proc = subprocess.Popen(
                 cmd,
                 cwd=launch_args["working_dir"],
-                startupinfo=startup_info
+                shell=shell,
+                startupinfo=startupinfo,
+                env=launch_args["env"]
             )
             
             # 等待启动
@@ -369,7 +368,7 @@ class EnhancedAppLauncher:
                 app_name=app_info.display_name,
                 process_id=proc.pid,
                 start_time=time.time(),
-                launch_method="direct"
+                launch_method="windows_direct"
             )
             
         except PermissionError as e:
@@ -381,7 +380,136 @@ class EnhancedAppLauncher:
                 error_details=str(e)
             )
         except Exception as e:
-            logger.error(f"可执行文件启动失败: {e}")
+            logger.error(f"Windows应用启动失败: {e}")
+            raise
+    
+    async def _launch_linux_app(self, app_info: AppInfo, launch_args: Dict) -> LaunchStatus:
+        """启动Linux应用"""
+        try:
+            logger.debug(f"启动Linux应用: {app_info.path}")
+            
+            # 构建命令
+            cmd = []
+            
+            # 处理提升权限
+            if launch_args["elevated"]:
+                cmd.extend(["pkexec", "--user", "root"])
+            
+            # 对于GUI应用，可能需要特殊处理
+            if app_info.path.endswith('.desktop'):
+                # 使用gtk-launch启动desktop文件
+                cmd.extend(["gtk-launch", os.path.basename(app_info.path)[:-8]])
+            else:
+                cmd.append(app_info.path)
+                cmd.extend(launch_args["args"])
+            
+            # 启动进程
+            proc = subprocess.Popen(
+                cmd,
+                cwd=launch_args["working_dir"],
+                env=launch_args["env"],
+                start_new_session=True
+            )
+            
+            # 等待启动
+            if self.config["wait_for_startup"]:
+                await self._wait_for_process_startup(proc, app_info.display_name)
+            
+            return LaunchStatus(
+                result=LaunchResult.SUCCESS,
+                message=f"已成功启动应用: {app_info.display_name}",
+                app_name=app_info.display_name,
+                process_id=proc.pid,
+                start_time=time.time(),
+                launch_method="linux_direct"
+            )
+            
+        except PermissionError as e:
+            logger.error(f"权限不足: {e}")
+            return LaunchStatus(
+                result=LaunchResult.ACCESS_DENIED,
+                message=f"启动应用失败: 权限不足",
+                app_name=app_info.display_name,
+                error_details=str(e)
+            )
+        except FileNotFoundError as e:
+            logger.error(f"文件未找到: {e}")
+            return LaunchStatus(
+                result=LaunchResult.NOT_FOUND,
+                message=f"找不到可执行文件: {app_info.path}",
+                app_name=app_info.display_name,
+                error_details=str(e)
+            )
+        except Exception as e:
+            logger.error(f"Linux应用启动失败: {e}")
+            raise
+    
+    async def _launch_macos_app(self, app_info: AppInfo, launch_args: Dict) -> LaunchStatus:
+        """启动macOS应用"""
+        try:
+            logger.debug(f"启动macOS应用: {app_info.path}")
+            
+            # 处理.app包
+            if app_info.path.endswith('.app'):
+                if self.config["macos"]["open_with_open_command"]:
+                    # 使用open命令
+                    cmd = ["open", app_info.path]
+                    if launch_args["args"]:
+                        cmd.extend(["--args"] + launch_args["args"])
+                else:
+                    # 直接执行包内可执行文件
+                    executable_path = Path(app_info.path) / "Contents" / "MacOS" / Path(app_info.path).stem
+                    if executable_path.exists():
+                        cmd = [str(executable_path)] + launch_args["args"]
+                    else:
+                        return LaunchStatus(
+                            result=LaunchResult.INVALID_PATH,
+                            message=f"无法找到可执行文件: {executable_path}",
+                            app_name=app_info.display_name
+                        )
+            else:
+                # 普通可执行文件
+                cmd = [app_info.path] + launch_args["args"]
+            
+            # 处理提升权限
+            if launch_args["elevated"]:
+                # 使用osascript提升权限
+                applescript = f'''
+                do shell script "{' '.join(cmd)}" with administrator privileges
+                '''
+                cmd = ["osascript", "-e", applescript]
+            
+            # 启动进程
+            proc = subprocess.Popen(
+                cmd,
+                cwd=launch_args["working_dir"],
+                env=launch_args["env"],
+                start_new_session=True
+            )
+            
+            # 等待启动
+            if self.config["wait_for_startup"]:
+                await self._wait_for_process_startup(proc, app_info.display_name)
+            
+            return LaunchStatus(
+                result=LaunchResult.SUCCESS,
+                message=f"已成功启动应用: {app_info.display_name}",
+                app_name=app_info.display_name,
+                process_id=proc.pid,
+                start_time=time.time(),
+                launch_method="macos_direct"
+            )
+            
+        except PermissionError as e:
+            logger.error(f"权限不足: {e}")
+            return LaunchStatus(
+                result=LaunchResult.ACCESS_DENIED,
+                message=f"启动应用失败: 权限不足",
+                app_name=app_info.display_name,
+                error_details=str(e)
+            )
+        except Exception as e:
+            logger.error(f"macOS应用启动失败: {e}")
             raise
     
     async def _wait_for_process_startup(self, proc: subprocess.Popen, app_name: str) -> None:
@@ -409,7 +537,8 @@ class EnhancedAppLauncher:
             "result": status.result.value,
             "process_id": status.process_id,
             "duration": time.time() - start_time,
-            "launch_method": status.launch_method
+            "launch_method": status.launch_method,
+            "platform": self.platform.os_type.value
         }
         
         self.launch_history.append(history_entry)
@@ -426,8 +555,10 @@ class EnhancedAppLauncher:
         running_apps = []
         
         try:
+            import psutil
+            
             for pid, info in self.running_processes.items():
-                if psutil.pid_exists(pid):
+                if self._is_process_running(pid):
                     try:
                         proc = psutil.Process(pid)
                         running_apps.append({
@@ -457,13 +588,19 @@ class EnhancedAppLauncher:
         # 查找并终止进程
         terminated = False
         try:
+            import psutil
+            
             exe_name = os.path.basename(app_info.path).lower()
             
             for proc in psutil.process_iter(['pid', 'name', 'exe']):
                 try:
                     if (proc.info['exe'] and proc.info['exe'].lower() == app_info.path.lower()) or \
                        (proc.info['name'] and proc.info['name'].lower() == exe_name):
-                        proc.terminate()
+                        # 根据平台选择终止方式
+                        if self.platform.os_type == OperatingSystem.WINDOWS:
+                            proc.terminate()
+                        else:
+                            proc.send_signal(signal.SIGTERM)
                         terminated = True
                         logger.info(f"已终止进程: {proc.pid} ({app_info.display_name})")
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -504,10 +641,11 @@ class EnhancedAppLauncher:
             "successful_launches": successful_launches,
             "success_rate": successful_launches / total_launches if total_launches > 0 else 0,
             "running_processes": len(self.running_processes),
+            "platform": self.platform.os_type.value,
             "scanner_stats": self.scanner.get_scan_stats()
         }
 
-# 创建增强版应用启动器
-def create_enhanced_launcher(config: Dict = None) -> EnhancedAppLauncher:
-    """创建增强版应用启动器实例"""
-    return EnhancedAppLauncher(config)
+# 创建跨平台应用启动器
+def create_cross_platform_launcher(config: Dict = None) -> CrossPlatformAppLauncher:
+    """创建跨平台应用启动器实例"""
+    return CrossPlatformAppLauncher(config)
