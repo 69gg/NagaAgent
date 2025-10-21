@@ -5,6 +5,31 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
 from PyQt5.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QCoreApplication
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
 
+
+def get_resource_path(relative_path):
+    """获取资源文件的绝对路径，兼容PyInstaller打包环境"""
+    try:
+        # PyInstaller创建临时文件夹，将路径存储在_MEIPASS中
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    # 尝试在多个可能的路径中查找文件
+    possible_paths = [
+        os.path.join(base_path, relative_path),
+        os.path.join(base_path, "_internal", relative_path),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", relative_path),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path),
+        relative_path
+    ]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+
+    # 如果都找不到，返回原始路径（让错误抛出）
+    return relative_path
+
 bg_alpha = 0.8  # 背景透明度
 animation_duration = 300  # 动画持续时间
 sidebar_width = 80  # 侧边栏宽度
@@ -76,8 +101,10 @@ class SidebarItem(QWidget):
 
     def convert_to_white_icon(self, icon_path, size=40):
         """将图标转换为白色版本"""
+        # 获取正确的资源路径
+        resolved_path = get_resource_path(icon_path)
         # 加载原始图像
-        pixmap = QPixmap(icon_path)
+        pixmap = QPixmap(resolved_path)
 
         if pixmap.isNull():
             raise FileNotFoundError(f"无法加载图标文件: {icon_path}。请检查文件路径是否正确。")
