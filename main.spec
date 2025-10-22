@@ -18,7 +18,8 @@ datas = [
     ('system', 'system'),
     ('ui', 'ui'),
     ('voice', 'voice'),
-    ('config.json', '.')
+    ('config.json', '.'),
+    ('ui/styles/progress.txt', 'ui/styles')
 ]
 
 # 添加py2neo包的VERSION文件到数据文件
