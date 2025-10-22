@@ -1,0 +1,56 @@
+name: Manual Build and Release (Windows)
+
+on:
+  workflow_dispatch:  # 仅手动触发
+    inputs:
+      note:
+        description: 'Release 备注（可选）'
+        required: false
+        default: 'Auto-generated Windows build'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    if: github.ref == 'refs/heads/build'  # 仅允许 build 分支触发
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          pip install uv
+
+      - name: Sync environment
+        run: |
+          uv sync
+
+      - name: Build with PyInstaller
+        run: |
+          uv run pyinstaller main.spec --build
+
+      - name: Compress build output
+        run: |
+          powershell Compress-Archive -Path "dist/main/*" -DestinationPath "NagaAgent_Windows.zip"
+
+      - name: Generate release tag
+        id: time
+        run: |
+          echo "tag=v$(Get-Date -Format 'yyyyMMdd-HHmmss')" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.time.outputs.tag }}
+          name: "Auto Build ${{ steps.time.outputs.tag }}"
+          body: ${{ github.event.inputs.note }}
+          files: |
+            NagaAgent_Windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
