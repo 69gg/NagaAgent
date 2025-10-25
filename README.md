@@ -163,6 +163,20 @@ python main.py --quick-check
 
 欢迎提交Issue和Pull Request！
 
+### 开发环境搭建
+
+```bash
+uv sync --group dev
+```
+
+### 构建
+
+```
+uv sync --group build
+uv run pyinstaller main.spec --clean
+```
+编译产物位于dist/main。
+
 <div align="center">
 
 ---
