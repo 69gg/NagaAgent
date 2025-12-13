@@ -355,15 +355,6 @@ python main.py --quick-check
 
 歡迎建立Issue和Pull Request！
 
-<details><summary>建構一鍵執行整合包</summary>
-
-```bash
-python build.py
-```
-建構完成的檔案位於`dist/`目錄下
-
-</details>
-
 [![Star History Chart](https://api.star-history.com/svg?repos=Xxiii8322766509/NagaAgent&type=date&legend=top-left)](https://www.star-history.com/#Xxiii8322766509/NagaAgent&type=date&legend=top-left)
 
 <div align="center">
