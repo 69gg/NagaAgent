@@ -33,7 +33,7 @@ class TestSystemCheckerInitialization:
         """测试SystemChecker初始化"""
         checker = SystemChecker()
         
-        assert checker.project_root.name == "system"
+        assert checker.project_root.name == "NagaAgent"
         assert checker.venv_path.name == "venv"
         assert checker.requirements_file.name == "requirements.txt"
         assert checker.config_file.name == "config.json"
@@ -99,10 +99,10 @@ class TestCheckPythonVersion:
             with patch("builtins.print") as mock_print:
                 result = checker.check_python_version()
                 
-                # 3.10应该通过但显示警告
-                assert result is True  # 3.10 >= 3.11? 不，3.10 < 3.11，应该返回False
-                # 实际上根据代码逻辑，3.10 < 3.11，应该返回False并显示警告
-                # 让我们检查代码：要求Python 3.11+，所以3.10应该返回False
+                # 3.10应该失败并显示警告
+                assert result is False  # 3.10 < 3.11，应该返回False
+                # 验证打印了警告信息
+                mock_print.assert_any_call("   [WARN] Python版本建议3.11+，当前3.10")
 
 
 class TestCheckVirtualEnvironment:
@@ -129,16 +129,19 @@ class TestCheckVirtualEnvironment:
         # Mock不在虚拟环境中
         with patch("sys.prefix", "/usr/bin/python3"):
             with patch("sys.base_prefix", "/usr/bin/python3"):  # base_prefix == prefix
-                # Mock venv目录不存在
-                with patch.object(checker.venv_path, 'exists', return_value=False):
-                    with patch("builtins.print") as mock_print:
-                        result = checker.check_virtual_environment()
-                        
-                        # 验证失败
-                        assert result is False
-                        # 验证打印了警告和建议
-                        assert any("[WARN]" in str(call) for call in mock_print.call_args_list)
-                        assert any("建议创建虚拟环境" in str(call) for call in mock_print.call_args_list)
+                # 创建venv_path的MagicMock
+                mock_venv_path = MagicMock()
+                mock_venv_path.exists.return_value = False
+                checker.venv_path = mock_venv_path
+                
+                with patch("builtins.print") as mock_print:
+                    result = checker.check_virtual_environment()
+                    
+                    # 验证失败
+                    assert result is False
+                    # 验证打印了警告和建议
+                    assert any("[WARN]" in str(call) for call in mock_print.call_args_list)
+                    assert any("建议创建虚拟环境" in str(call) for call in mock_print.call_args_list)
     
     def test_check_virtual_environment_not_in_venv_but_exists(self):
         """测试不在虚拟环境中但venv目录存在"""
@@ -147,15 +150,18 @@ class TestCheckVirtualEnvironment:
         # Mock不在虚拟环境中
         with patch("sys.prefix", "/usr/bin/python3"):
             with patch("sys.base_prefix", "/usr/bin/python3"):
-                # Mock venv目录存在
-                with patch.object(checker.venv_path, 'exists', return_value=True):
-                    with patch("builtins.print") as mock_print:
-                        result = checker.check_virtual_environment()
-                        
-                        # 验证失败（但提供了激活建议）
-                        assert result is False
-                        # 验证打印了venv目录信息
-                        assert any("venv目录" in str(call) for call in mock_print.call_args_list)
+                # 创建venv_path的MagicMock
+                mock_venv_path = MagicMock()
+                mock_venv_path.exists.return_value = True
+                checker.venv_path = mock_venv_path
+                
+                with patch("builtins.print") as mock_print:
+                    result = checker.check_virtual_environment()
+                    
+                    # 验证失败（但提供了激活建议）
+                    assert result is False
+                    # 验证打印了venv目录信息
+                    assert any("venv目录" in str(call) for call in mock_print.call_args_list)
 
 
 class TestCheckRequirementsFile:
@@ -166,45 +172,60 @@ class TestCheckRequirementsFile:
         checker = SystemChecker()
         
         # Mock文件存在
-        with patch.object(checker.requirements_file, 'exists', return_value=True):
-            with patch.object(checker.pyproject_file, 'exists', return_value=True):
-                with patch("builtins.print") as mock_print:
-                    result = checker.check_requirements_file()
-                    
-                    # 验证通过
-                    assert result is True
-                    # 验证打印了成功信息
-                    assert any("依赖文件存在" in str(call) for call in mock_print.call_args_list)
-                    assert any("pyproject.toml存在" in str(call) for call in mock_print.call_args_list)
+        mock_requirements = MagicMock()
+        mock_requirements.exists.return_value = True
+        checker.requirements_file = mock_requirements
+        
+        mock_pyproject = MagicMock()
+        mock_pyproject.exists.return_value = True
+        checker.pyproject_file = mock_pyproject
+        
+        with patch("builtins.print") as mock_print:
+            result = checker.check_requirements_file()
+            
+            # 验证通过
+            assert result is True
+            # 验证打印了成功信息
+            assert any("依赖文件存在" in str(call) for call in mock_print.call_args_list)
+            assert any("pyproject.toml存在" in str(call) for call in mock_print.call_args_list)
     
     def test_check_requirements_file_missing(self):
         """测试requirements.txt不存在"""
         checker = SystemChecker()
         
         # Mock文件不存在
-        with patch.object(checker.requirements_file, 'exists', return_value=False):
-            with patch("builtins.print") as mock_print:
-                result = checker.check_requirements_file()
-                
-                # 验证失败
-                assert result is False
-                # 验证打印了错误信息
-                assert any("未找到requirements.txt文件" in str(call) for call in mock_print.call_args_list)
+        mock_requirements = MagicMock()
+        mock_requirements.exists.return_value = False
+        checker.requirements_file = mock_requirements
+        
+        with patch("builtins.print") as mock_print:
+            result = checker.check_requirements_file()
+            
+            # 验证失败
+            assert result is False
+            # 验证打印了错误信息
+            assert any("未找到requirements.txt文件" in str(call) for call in mock_print.call_args_list)
     
     def test_check_requirements_file_pyproject_missing(self):
         """测试pyproject.toml不存在（可选）"""
         checker = SystemChecker()
         
         # Mock requirements.txt存在，pyproject.toml不存在
-        with patch.object(checker.requirements_file, 'exists', return_value=True):
-            with patch.object(checker.pyproject_file, 'exists', return_value=False):
-                with patch("builtins.print") as mock_print:
-                    result = checker.check_requirements_file()
-                    
-                    # 验证通过（pyproject.toml是可选的）
-                    assert result is True
-                    # 验证打印了警告信息
-                    assert any("pyproject.toml不存在" in str(call) for call in mock_print.call_args_list)
+        mock_requirements = MagicMock()
+        mock_requirements.exists.return_value = True
+        checker.requirements_file = mock_requirements
+        
+        mock_pyproject = MagicMock()
+        mock_pyproject.exists.return_value = False
+        checker.pyproject_file = mock_pyproject
+        
+        with patch("builtins.print") as mock_print:
+            result = checker.check_requirements_file()
+            
+            # 验证通过（pyproject.toml是可选的）
+            assert result is True
+            # 验证打印了警告信息
+            assert any("pyproject.toml不存在" in str(call) for call in mock_print.call_args_list)
 
 
 class TestCheckCoreDependencies:
@@ -216,7 +237,8 @@ class TestCheckCoreDependencies:
         
         # Mock导入成功
         with patch("importlib.import_module") as mock_import:
-            mock_import.return_value = Mock()
+            # 确保所有导入都返回Mock，避免任何ImportError
+            mock_import.side_effect = lambda name: Mock()
             
             with patch("builtins.print") as mock_print:
                 result = checker.check_core_dependencies()
@@ -236,6 +258,7 @@ class TestCheckCoreDependencies:
         def side_effect(name):
             if name == "nagaagent_core":
                 raise ImportError("No module named 'nagaagent_core'")
+            # 其他所有导入都返回Mock，包括neo4j等
             return Mock()
         
         with patch("importlib.import_module", side_effect=side_effect):
@@ -260,6 +283,7 @@ class TestCheckOptionalDependencies:
         def side_effect(name):
             if name == "cv2":  # opencv_python的模块名
                 raise ImportError("No module named 'cv2'")
+            # 其他所有导入都返回Mock，包括neo4j等
             return Mock()
         
         with patch("importlib.import_module", side_effect=side_effect):
@@ -281,33 +305,47 @@ class TestCheckConfigFiles:
         checker = SystemChecker()
         
         # Mock文件存在
-        with patch.object(checker.config_file, 'exists', return_value=True):
-            with patch.object(checker.project_root, '__truediv__') as mock_div:
-                mock_file = Mock()
-                mock_file.exists.return_value = True
-                mock_div.return_value = mock_file
-                
-                with patch("builtins.print") as mock_print:
-                    result = checker.check_config_files()
-                    
-                    # 验证通过
-                    assert result is True
-                    # 验证打印了成功信息
-                    assert any("[OK]" in str(call) for call in mock_print.call_args_list)
+        mock_config_file = MagicMock()
+        mock_config_file.exists.return_value = True
+        checker.config_file = mock_config_file
+        
+        mock_project_root = MagicMock()
+        mock_div_result = MagicMock()
+        mock_div_result.exists.return_value = True
+        mock_project_root.__truediv__.return_value = mock_div_result
+        checker.project_root = mock_project_root
+        
+        with patch("builtins.print") as mock_print:
+            result = checker.check_config_files()
+            
+            # 验证通过
+            assert result is True
+            # 验证打印了成功信息
+            assert any("[OK]" in str(call) for call in mock_print.call_args_list)
     
     def test_check_config_files_missing(self):
         """测试配置文件缺失"""
         checker = SystemChecker()
         
         # Mock文件不存在
-        with patch.object(checker.config_file, 'exists', return_value=False):
-            with patch("builtins.print") as mock_print:
-                result = checker.check_config_files()
-                
-                # 验证失败
-                assert result is False
-                # 验证打印了错误信息
-                assert any("不存在" in str(call) for call in mock_print.call_args_list)
+        mock_config_file = MagicMock()
+        mock_config_file.exists.return_value = False
+        checker.config_file = mock_config_file
+        
+        # Mock project_root以避免路径构建错误
+        mock_project_root = MagicMock()
+        mock_div_result = MagicMock()
+        mock_div_result.exists.return_value = False
+        mock_project_root.__truediv__.return_value = mock_div_result
+        checker.project_root = mock_project_root
+        
+        with patch("builtins.print") as mock_print:
+            result = checker.check_config_files()
+            
+            # 验证失败
+            assert result is False
+            # 验证打印了错误信息
+            assert any("不存在" in str(call) for call in mock_print.call_args_list)
 
 
 class TestCheckDirectoryStructure:
@@ -317,8 +355,19 @@ class TestCheckDirectoryStructure:
         """测试所有目录都存在"""
         checker = SystemChecker()
         
+        # required_dirs是check_directory_structure方法内的局部变量
+        required_dirs = [
+            ("ui", "用户界面"),
+            ("apiserver", "API服务器"),
+            ("agentserver", "Agent服务器"),
+            ("mcpserver", "MCP服务器"),
+            ("summer_memory", "记忆系统"),
+            ("voice", "语音模块"),
+            ("system", "系统核心")
+        ]
+        
         # 创建临时目录结构
-        for dir_name, _ in checker.required_dirs:
+        for dir_name, _ in required_dirs:
             (temp_dir / dir_name).mkdir()
         
         # Mock项目根目录为临时目录
@@ -518,41 +567,94 @@ class TestCheckNeo4jConnection:
     
     def test_check_neo4j_connection_disabled(self, temp_dir: Path):
         """测试Neo4j未启用"""
-        checker = SystemChecker()
-        checker.config_file = temp_dir / "config.json"
-        
-        # 创建配置文件，Neo4j未启用
-        config_data = {"grag": {"enabled": False}}
-        checker.config_file.write_text(json.dumps(config_data), encoding="utf-8")
-        
-        with patch("builtins.print") as mock_print:
-            result = checker.check_neo4j_connection()
+        # Mock get_all_server_ports避免加载真实配置文件
+        with patch("system.config.get_all_server_ports") as mock_get_ports:
+            mock_get_ports.return_value = {
+                "api_server": 8000,
+                "agent_server": 8001,
+                "mcp_server": 8003,
+                "tts_server": 5048,
+                "asr_server": 5060
+            }
             
-            # 验证通过（未启用视为通过）
-            assert result is True
-            # 验证打印了信息
-            assert any("未启用" in str(call) for call in mock_print.call_args_list)
+            checker = SystemChecker()
+            checker.config_file = temp_dir / "config.json"
+            
+            # 创建配置文件，Neo4j未启用
+            config_data = {"grag": {"enabled": False}}
+            checker.config_file.write_text(json.dumps(config_data), encoding="utf-8")
+            
+            # Mock from_path函数
+            mock_charset_results = MagicMock()
+            mock_best_match = MagicMock()
+            mock_best_match.encoding = "utf-8"
+            mock_charset_results.best.return_value = mock_best_match
+            
+            with patch("system.system_checker.from_path", return_value=mock_charset_results):
+                with patch("system.system_checker.json5.load") as mock_json5_load:
+                    mock_json5_load.return_value = config_data
+                    
+                    with patch("builtins.print") as mock_print:
+                        result = checker.check_neo4j_connection()
+                        
+                        # 验证通过（未启用视为通过）
+                        assert result is True
+                        # 验证打印了信息
+                        assert any("未启用" in str(call) for call in mock_print.call_args_list)
     
     def test_check_neo4j_connection_enabled_success(self, temp_dir: Path):
         """测试Neo4j启用且连接成功"""
-        checker = SystemChecker()
-        checker.config_file = temp_dir / "config.json"
-        
-        # 创建配置文件，Neo4j启用
-        config_data = {"grag": {"enabled": True, "neo4j_uri": "neo4j://localhost:7687", "neo4j_user": "neo4j"}}
-        checker.config_file.write_text(json.dumps(config_data), encoding="utf-8")
-        
-        # Mock导入成功
-        with patch("importlib.import_module") as mock_import:
-            mock_import.return_value = Mock()
-            
-            with patch("builtins.print") as mock_print:
-                result = checker.check_neo4j_connection()
+        # Mock get_all_server_ports避免加载真实配置文件
+        with patch("system.config.get_all_server_ports") as mock_get_ports:
+            with patch("system.config.load_config") as mock_load_config:
+                # 创建默认配置对象
+                mock_config = MagicMock()
+                mock_config.system.version = "4.0.0"
+                mock_load_config.return_value = mock_config
+                mock_get_ports.return_value = {
+                    "api_server": 8000,
+                    "agent_server": 8001,
+                    "mcp_server": 8003,
+                    "tts_server": 5048,
+                    "asr_server": 5060
+                }
                 
-                # 验证通过
-                assert result is True
-                # 验证打印了成功信息
-                assert any("Neo4j包已安装" in str(call) for call in mock_print.call_args_list)
+                checker = SystemChecker()
+                checker.config_file = temp_dir / "config.json"
+                
+                # 创建配置文件，Neo4j启用
+                config_data = {"grag": {"enabled": True, "neo4j_uri": "neo4j://localhost:7687", "neo4j_user": "neo4j"}}
+                checker.config_file.write_text(json.dumps(config_data), encoding="utf-8")
+                
+                # Mock from_path函数
+                mock_charset_results = MagicMock()
+                mock_best_match = MagicMock()
+                mock_best_match.encoding = "utf-8"
+                mock_charset_results.best.return_value = mock_best_match
+                
+                # 创建模拟的neo4j模块
+                mock_neo4j_module = MagicMock()
+                mock_graph_database = MagicMock()
+                mock_neo4j_module.GraphDatabase = mock_graph_database
+                
+                # Mock导入成功
+                def import_module_side_effect(name):
+                    if name == "neo4j":
+                        return mock_neo4j_module
+                    return Mock()  # 其他模块返回默认Mock
+                
+                with patch("importlib.import_module", side_effect=import_module_side_effect):
+                    with patch("system.system_checker.from_path", return_value=mock_charset_results):
+                        with patch("system.system_checker.json5.load") as mock_json5_load:
+                            mock_json5_load.return_value = config_data
+                            
+                            with patch("builtins.print") as mock_print:
+                                result = checker.check_neo4j_connection()
+                                
+                                # 验证通过
+                                assert result is True
+                                # 验证打印了成功信息
+                                assert any("Neo4j包已安装" in str(call) for call in mock_print.call_args_list)
     
     def test_check_neo4j_connection_enabled_import_error(self, temp_dir: Path):
         """测试Neo4j启用但包未安装"""
@@ -562,15 +664,25 @@ class TestCheckNeo4jConnection:
         config_data = {"grag": {"enabled": True}}
         checker.config_file.write_text(json.dumps(config_data), encoding="utf-8")
         
+        # Mock from_path函数
+        mock_charset_results = MagicMock()
+        mock_best_match = MagicMock()
+        mock_best_match.encoding = "utf-8"
+        mock_charset_results.best.return_value = mock_best_match
+        
         # Mock导入失败
         with patch("importlib.import_module", side_effect=ImportError("No module named 'neo4j'")):
-            with patch("builtins.print") as mock_print:
-                result = checker.check_neo4j_connection()
-                
-                # 验证失败
-                assert result is False
-                # 验证打印了错误信息
-                assert any("Neo4j包未安装" in str(call) for call in mock_print.call_args_list)
+            with patch("system.system_checker.from_path", return_value=mock_charset_results):
+                with patch("system.system_checker.json5.load") as mock_json5_load:
+                    mock_json5_load.return_value = config_data
+                    
+                    with patch("builtins.print") as mock_print:
+                        result = checker.check_neo4j_connection()
+                        
+                        # 验证失败
+                        assert result is False
+                        # 验证打印了错误信息
+                        assert any("Neo4j包未安装" in str(call) for call in mock_print.call_args_list)
 
 
 class TestCheckAll:
@@ -634,7 +746,7 @@ class TestUtilityMethods:
                         mock_version_info.minor = 11
                         mock_version_info.micro = 5
                         
-                        with patch("sys.executable", return_value="/usr/bin/python3"):
+                        with patch("sys.executable", "/usr/bin/python3"):
                             info = checker.get_system_info()
                             
                             # 验证信息完整
