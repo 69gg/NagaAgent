@@ -1,0 +1,166 @@
+[run]
+# 覆盖率分析范围
+source = 
+    agentserver
+    apiserver
+    game
+    mcpserver
+    summer_memory
+    system
+    mqtt_tool
+    ui
+    voice
+
+# 分支覆盖率分析
+branch = True
+
+# 包含/排除模式
+include = 
+    */agentserver/*.py
+    */apiserver/*.py
+    */game/*.py
+    */mcpserver/*.py
+    */summer_memory/*.py
+    */system/*.py
+    */mqtt_tool/*.py
+    */ui/*.py
+    */voice/*.py
+
+omit = 
+    */__pycache__/*
+    */tests/*
+    */.pytest_cache/*
+    */.venv/*
+    */node_modules/*
+    */dist/*
+    */build/*
+    */*.egg-info/*
+    */migrations/*
+    */templates/*
+    */static/*
+    */img/*
+    */imgs/*
+    */docs/*
+    */examples/*
+    */logs/*
+    */.git/*
+    */configs/*.yaml
+    */configs/*.yml
+    */configs/*.json
+    */config.py
+    */config.json
+    */config.json.example
+    */setup.py
+    */main.py
+    */uv.lock
+    */requirements.txt
+    */pyproject.toml
+    */pytest.ini
+    */.coveragerc
+    */README*
+    */LICENSE
+    */start.sh
+    */start.bat
+    */setup.sh
+    */setup.bat
+
+# 忽略以下行（类型定义、空行、注释等）
+exclude_lines = 
+    # 不要检查pragma标记
+    pragma: no cover
+    # 不要检查类型定义
+    ^\s*from typing import
+    ^\s*import typing
+    ^\s*TypeAlias = 
+    ^\s*type\s+\w+\s*=
+    # 不要检查空行
+    ^\s*$
+    # 不要检查注释
+    ^\s*#.*$
+    # 不要检查文档字符串
+    ^\s*""".*"""$
+    ^\s*'''.*'''$
+    # 不要检查pass语句
+    ^\s*pass\s*$
+    # 不要检查ellipsis
+    ^\s*\.\.\.\s*$
+    # 不要检查调试代码
+    ^\s*if __name__ == ['"]__main__['"]:$
+    ^\s*def main\(\):$
+    # 不要检查抽象方法
+    ^\s*@abstractmethod$
+    ^\s*def .*\(.*\):\s*$
+    \s*raise NotImplementedError\(
+    # 不要检查日志语句
+    ^\s*logger\.(debug|info|warning|error|critical)\(
+    ^\s*print\(
+    ^\s*logging\.(debug|info|warning|error|critical)\(
+
+[report]
+# 报告配置
+exclude_lines = 
+    # 与run部分相同，但针对报告
+    pragma: no cover
+    ^\s*from typing import
+    ^\s*import typing
+    ^\s*TypeAlias = 
+    ^\s*type\s+\w+\s*=
+    ^\s*$
+    ^\s*#.*$
+    ^\s*""".*"""$
+    ^\s*'''.*'''$
+    ^\s*pass\s*$
+    ^\s*\.\.\.\s*$
+    ^\s*if __name__ == ['"]__main__['"]:$
+    ^\s*def main\(\):$
+    ^\s*@abstractmethod$
+    ^\s*def .*\(.*\):\s*$
+    \s*raise NotImplementedError\(
+    ^\s*logger\.(debug|info|warning|error|critical)\(
+    ^\s*print\(
+    ^\s*logging\.(debug|info|warning|error|critical)\(
+
+# 忽略的文件
+exclude_also = 
+    */__init__.py
+    */__main__.py
+    */version.py
+    */_version.py
+
+# 精确度
+precision = 2
+
+# 显示缺失的行
+show_missing = True
+
+# 跳过空文件
+skip_empty = True
+
+[html]
+# HTML报告配置
+directory = coverage_html_report
+title = NagaAgent 测试覆盖率报告
+extra_css = 
+show_contexts = True
+
+[xml]
+# XML报告配置（用于CI/CD）
+output = coverage.xml
+
+[json]
+# JSON报告配置
+output = coverage.json
+pretty_print = True
+
+[paths]
+# 路径映射（用于虚拟环境）
+source = 
+    agentserver/
+    apiserver/
+    game/
+    mcpserver/
+    summer_memory/
+    system/
+    mqtt_tool/
+    ui/
+    voice/
