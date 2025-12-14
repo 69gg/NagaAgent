@@ -44,11 +44,15 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item]) -> None:
     """测试收集后修改项目"""
     # 默认跳过标记为gui的测试（除非明确指定运行）
-    if not config.getoption("--run-gui"):
-        skip_gui = pytest.mark.skip(reason="需要 --run-gui 选项来运行GUI测试")
-        for item in items:
-            if "gui" in item.keywords:
-                item.add_marker(skip_gui)
+    try:
+        if not config.getoption("--run-gui"):
+            skip_gui = pytest.mark.skip(reason="需要 --run-gui 选项来运行GUI测试")
+            for item in items:
+                if "gui" in item.keywords:
+                    item.add_marker(skip_gui)
+    except ValueError:
+        # 选项不存在，跳过检查
+        pass
 
 
 # ============================================================================
