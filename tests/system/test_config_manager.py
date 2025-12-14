@@ -295,14 +295,21 @@ class TestConfigFileOperations:
         config_file = temp_dir / "config.json"
         config_data = {"system": {"version": "4.0.1"}}
         
-        # Mock charset_normalizer检测编码
+        # Mock charset_normalizer检测编码和json5.dump
         with patch("system.config_manager.from_path") as mock_from_path:
-            mock_result = MagicMock()
-            mock_result.best.return_value = MagicMock(encoding="utf-8")
-            mock_from_path.return_value = mock_result
-            
-            # 保存配置
-            result = manager._save_config_file(str(config_file), config_data)
+            with patch("system.config_manager.json5.dump") as mock_json5_dump:
+                mock_result = MagicMock()
+                mock_result.best.return_value = MagicMock(encoding="utf-8")
+                mock_from_path.return_value = mock_result
+                
+                # 设置json5.dump模拟实际写入JSON数据
+                def mock_dump(data, file, **kwargs):
+                    import json
+                    json.dump(data, file, ensure_ascii=False, indent=2)
+                mock_json5_dump.side_effect = mock_dump
+                
+                # 保存配置
+                result = manager._save_config_file(str(config_file), config_data)
             
             # 验证文件被保存
             assert result is True

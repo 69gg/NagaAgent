@@ -181,8 +181,9 @@ class TestConfigLoading:
         """测试配置文件不存在时使用默认配置"""
         with patch("system.config.Path") as mock_path:
             # 模拟配置文件不存在
-            mock_path.return_value.parent.parent.__truediv__.return_value.exists.return_value = False
-            mock_path.return_value.parent.parent.__truediv__.return_value = temp_dir / "config.json"
+            mock_config_file = MagicMock()
+            mock_config_file.exists.return_value = False
+            mock_path.return_value.parent.parent.__truediv__.return_value = mock_config_file
             
             # 调用load_config
             result = load_config()
@@ -213,7 +214,6 @@ class TestConfigLoading:
         
         with patch("system.config.Path") as mock_path:
             mock_path.return_value.parent.parent.__truediv__.return_value = config_file
-            mock_path.return_value.parent.parent.__truediv__.return_value.exists.return_value = True
             
             # Mock charset_normalizer检测编码
             with patch("system.config.from_path") as mock_from_path:
@@ -227,7 +227,8 @@ class TestConfigLoading:
                         "system": {
                             "version": "4.0.1",
                             "ai_name": "测试名称",
-                            "debug": True
+                            "debug": True,
+                            "log_dir": str(temp_dir / "logs")
                         },
                         "api": {
                             "api_key": "test_key_123",
@@ -261,7 +262,6 @@ class TestConfigLoading:
         
         with patch("system.config.Path") as mock_path:
             mock_path.return_value.parent.parent.__truediv__.return_value = config_file
-            mock_path.return_value.parent.parent.__truediv__.return_value.exists.return_value = True
             
             with patch("system.config.from_path") as mock_from_path:
                 mock_result = MagicMock()
@@ -275,7 +275,8 @@ class TestConfigLoading:
                         expected_config = {
                             "system": {
                                 "version": "4.0.1",
-                                "ai_name": "测试名称"
+                                "ai_name": "测试名称",
+                                "log_dir": str(temp_dir / "logs")
                             }
                         }
                         mock_json_loads.return_value = expected_config
