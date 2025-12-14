@@ -374,7 +374,7 @@ class TestBackgroundAnalyzer:
         session_id = "test_session_notify"
         
         # Mock httpx（在函数内部导入，需要模拟全局模块）
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             with patch("system.background_analyzer.get_server_port", return_value=8000):
                 mock_client = AsyncMock()
                 mock_response = Mock(status_code=200)
@@ -396,7 +396,7 @@ class TestBackgroundAnalyzer:
         tool_calls = [{"tool_name": "test"}]
         
         # Mock httpx抛出异常（在函数内部导入，需要模拟全局模块）
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             with patch("system.background_analyzer.get_server_port", return_value=8000):
                 mock_client = AsyncMock()
                 mock_client.post = AsyncMock(side_effect=Exception("网络错误"))
@@ -449,7 +449,7 @@ class TestBackgroundAnalyzer:
         analysis_session_id = "analysis_mcp_123"
         
         # Mock httpx和uuid（在函数内部导入，需要模拟全局模块）
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             with patch("system.background_analyzer.uuid") as mock_uuid:
                 with patch("system.background_analyzer.get_server_port", return_value=8003):
                     mock_uuid.uuid4.return_value = "test-uuid-123"
@@ -487,7 +487,7 @@ class TestBackgroundAnalyzer:
         """测试发送任务到MCP服务器出错"""
         mcp_calls = [{"tool_name": "search"}]
         
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             with patch("system.background_analyzer.get_server_port", return_value=8003):
                 mock_client = AsyncMock()
                 mock_response = Mock(status_code=500, text="服务器错误")
@@ -508,7 +508,7 @@ class TestBackgroundAnalyzer:
         analysis_session_id = "analysis_agent_123"
         
         # Mock httpx和uuid（在函数内部导入，需要模拟全局模块）
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             with patch("system.background_analyzer.uuid") as mock_uuid:
                 with patch("system.background_analyzer.get_server_port", return_value=8001):
                     mock_uuid.uuid4.return_value = "test-uuid-agent-123"

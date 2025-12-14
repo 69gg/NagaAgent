@@ -459,7 +459,7 @@ class TestSendCallbackNotification:
         from agentserver.agent_server import _send_callback_notification
         
         # Mock httpx（在函数内部导入，需要模拟全局模块）
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             mock_client = AsyncMock()
             mock_response = Mock(status_code=200)
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -498,7 +498,7 @@ class TestSendCallbackNotification:
         """测试发送回调通知（服务器错误响应）"""
         from agentserver.agent_server import _send_callback_notification
         
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             mock_client = AsyncMock()
             mock_response = Mock(status_code=500)
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -521,7 +521,7 @@ class TestSendCallbackNotification:
         """测试发送回调通知异常"""
         from agentserver.agent_server import _send_callback_notification
         
-        with patch("httpx") as mock_httpx:
+        with patch("httpx", create=True) as mock_httpx:
             mock_httpx.AsyncClient.side_effect = Exception("网络错误")
             
             with patch("agentserver.agent_server.logger") as mock_logger:
