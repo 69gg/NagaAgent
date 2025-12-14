@@ -310,7 +310,7 @@ class TestConfigFileOperations:
             
             # 验证文件内容
             saved_content = config_file.read_text(encoding="utf-8")
-            saved_data = json5.loads(saved_content)
+            saved_data = json.loads(saved_content)
             assert saved_data == config_data
     
     def test_save_config_file_error(self):

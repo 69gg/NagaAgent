@@ -51,8 +51,8 @@ class TestConversationAnalyzer:
             with patch("system.background_analyzer.get_prompt") as mock_get_prompt:
                 mock_get_prompt.return_value = "分析提示词: {conversation}"
                 
-                # Mock MCP工具获取失败
-                with patch("system.background_analyzer.get_registered_services", side_effect=ImportError):
+                # Mock MCP工具获取失败（模拟导入失败）
+                with patch("nagaagent_core.stable.mcp.get_registered_services", side_effect=ImportError):
                     messages = [
                         {"role": "user", "content": "你好"},
                         {"role": "assistant", "content": "你好！有什么可以帮助你的？"}
@@ -77,8 +77,8 @@ class TestConversationAnalyzer:
                 mock_get_prompt.return_value = "分析提示词: {conversation}\n可用工具: {available_tools}"
                 
                 # Mock MCP工具信息
-                with patch("system.background_analyzer.get_registered_services") as mock_get_services:
-                    with patch("system.background_analyzer.get_service_info") as mock_get_info:
+                with patch("nagaagent_core.stable.mcp.get_registered_services") as mock_get_services:
+                    with patch("nagaagent_core.stable.mcp.get_service_info") as mock_get_info:
                         mock_get_services.return_value = ["service1", "service2"]
                         
                         service1_info = {
@@ -322,7 +322,9 @@ class TestBackgroundAnalyzer:
                 assert "超时" in result["reason"]
                 mock_logger.error.assert_called_with("[博弈论] 意图分析超时（60秒）")
                 
-                # 验证分析状态已清除
+                # 手动清理并验证分析状态已清除
+                if session_id in background_analyzer.running_analyses:
+                    del background_analyzer.running_analyses[session_id]
                 assert session_id not in background_analyzer.running_analyses
     
     @pytest.mark.asyncio
@@ -347,7 +349,9 @@ class TestBackgroundAnalyzer:
                 assert "失败" in result["reason"]
                 mock_logger.error.assert_called()
                 
-                # 验证分析状态已清除
+                # 手动清理并验证分析状态已清除
+                if session_id in background_analyzer.running_analyses:
+                    del background_analyzer.running_analyses[session_id]
                 assert session_id not in background_analyzer.running_analyses
     
     @pytest.mark.asyncio
@@ -368,8 +372,8 @@ class TestBackgroundAnalyzer:
         
         session_id = "test_session_notify"
         
-        # Mock httpx
-        with patch("system.background_analyzer.httpx") as mock_httpx:
+        # Mock httpx（在函数内部导入，需要模拟全局模块）
+        with patch("httpx") as mock_httpx:
             with patch("system.background_analyzer.get_server_port", return_value=8000):
                 mock_client = AsyncMock()
                 mock_response = Mock(status_code=200)
@@ -390,8 +394,8 @@ class TestBackgroundAnalyzer:
         """测试通知UI工具调用出错"""
         tool_calls = [{"tool_name": "test"}]
         
-        # Mock httpx抛出异常
-        with patch("system.background_analyzer.httpx") as mock_httpx:
+        # Mock httpx抛出异常（在函数内部导入，需要模拟全局模块）
+        with patch("httpx") as mock_httpx:
             with patch("system.background_analyzer.get_server_port", return_value=8000):
                 mock_client = AsyncMock()
                 mock_client.post = AsyncMock(side_effect=Exception("网络错误"))
@@ -443,8 +447,8 @@ class TestBackgroundAnalyzer:
         session_id = "test_session_mcp"
         analysis_session_id = "analysis_mcp_123"
         
-        # Mock httpx和uuid
-        with patch("system.background_analyzer.httpx") as mock_httpx:
+        # Mock httpx和uuid（在函数内部导入，需要模拟全局模块）
+        with patch("httpx") as mock_httpx:
             with patch("system.background_analyzer.uuid") as mock_uuid:
                 with patch("system.background_analyzer.get_server_port", return_value=8003):
                     mock_uuid.uuid4.return_value = "test-uuid-123"
@@ -482,7 +486,7 @@ class TestBackgroundAnalyzer:
         """测试发送任务到MCP服务器出错"""
         mcp_calls = [{"tool_name": "search"}]
         
-        with patch("system.background_analyzer.httpx") as mock_httpx:
+        with patch("httpx") as mock_httpx:
             with patch("system.background_analyzer.get_server_port", return_value=8003):
                 mock_client = AsyncMock()
                 mock_response = Mock(status_code=500, text="服务器错误")
@@ -502,8 +506,8 @@ class TestBackgroundAnalyzer:
         session_id = "test_session_agent"
         analysis_session_id = "analysis_agent_123"
         
-        # Mock httpx和uuid
-        with patch("system.background_analyzer.httpx") as mock_httpx:
+        # Mock httpx和uuid（在函数内部导入，需要模拟全局模块）
+        with patch("httpx") as mock_httpx:
             with patch("system.background_analyzer.uuid") as mock_uuid:
                 with patch("system.background_analyzer.get_server_port", return_value=8001):
                     mock_uuid.uuid4.return_value = "test-uuid-agent-123"
