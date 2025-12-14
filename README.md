@@ -346,6 +346,114 @@ python main.py --quick-check
 </details>
 
 
+## 测试
+
+NagaAgent 使用 `pytest` 作为测试框架，并配置了完整的测试基础设施，包括单元测试、集成测试和覆盖率检查。
+
+### 运行测试
+
+#### 安装测试依赖
+
+```bash
+# 使用 uv 安装测试依赖组
+uv sync --group test
+
+# 或使用传统方式
+pip install -e ".[test]"
+```
+
+#### 运行所有测试
+
+```bash
+# 使用 uv 运行测试
+uv run pytest
+
+# 运行特定模块的测试
+uv run pytest tests/system/
+uv run pytest tests/agentserver/
+uv run pytest tests/apiserver/
+
+# 运行测试并查看详细输出
+uv run pytest -v
+
+# 运行测试并生成覆盖率报告
+uv run pytest --cov=nagaagent --cov-report=html --cov-report=term-missing
+```
+
+#### 测试标记
+
+项目使用 pytest 标记对测试进行分类：
+
+- `@pytest.mark.unit` - 单元测试
+- `@pytest.mark.integration` - 集成测试  
+- `@pytest.mark.e2e` - 端到端测试
+- `@pytest.mark.gui` - GUI测试（需要图形界面）
+- `@pytest.mark.slow` - 慢速测试
+
+```bash
+# 只运行单元测试
+uv run pytest -m unit
+
+# 排除慢速测试
+uv run pytest -m "not slow"
+
+# 运行需要图形界面的测试
+uv run pytest --run-gui -m gui
+```
+
+### 测试覆盖率
+
+项目配置了完整的测试覆盖率检查，目标为 100% 覆盖率：
+
+```bash
+# 生成HTML覆盖率报告
+uv run pytest --cov=nagaagent --cov-report=html
+# 报告生成在 coverage_html_report/ 目录中
+
+# 在终端显示覆盖率摘要
+uv run pytest --cov=nagaagent --cov-report=term-missing
+
+# 检查覆盖率是否达到100%
+uv run pytest --cov=nagaagent --cov-fail-under=100
+```
+
+### 测试配置
+
+- `pytest.ini` - pytest 配置文件
+- `.coveragerc` - 覆盖率配置文件
+- `tests/conftest.py` - 全局测试夹具和配置
+- `pyproject.toml` - 包含测试依赖组定义
+
+### 编写新测试
+
+参考现有测试文件的结构：
+
+1. 在 `tests/` 目录下创建对应模块的测试文件
+2. 使用 `pytest.mark.asyncio` 装饰异步测试
+3. 充分利用 `conftest.py` 中定义的夹具
+4. 使用 Mock 对象隔离外部依赖
+
+示例测试文件结构：
+
+```python
+import pytest
+from unittest.mock import Mock, patch
+
+class TestMyModule:
+    def test_sync_function(self):
+        # 测试同步函数
+        pass
+    
+    @pytest.mark.asyncio
+    async def test_async_function(self):
+        # 测试异步函数
+        pass
+```
+
+### 持续集成
+
+项目配置了完整的测试流水线，确保代码质量和稳定性。每次提交都会自动运行测试套件，检查代码风格和测试覆盖率。
+
 ## 许可证
 
 [NagaAgent License](LICENSE)
