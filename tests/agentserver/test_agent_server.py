@@ -14,6 +14,7 @@ import uuid
 from typing import Dict, Any
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from agentserver.agent_server import app, Modules, _now_iso, lifespan

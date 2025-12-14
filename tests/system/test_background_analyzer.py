@@ -14,6 +14,7 @@ import time
 from typing import Dict, List, Any
 from unittest.mock import Mock, patch, MagicMock, AsyncMock
 
+import httpx
 import pytest
 import pytest_asyncio
 from system.background_analyzer import (
