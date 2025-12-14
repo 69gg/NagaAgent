@@ -113,7 +113,7 @@ class TestConversationAnalyzer:
                         call_kwargs = mock_get_prompt.call_args[1]
                         assert "conversation" in call_kwargs
                         assert "available_tools" in call_kwargs
-                        assert "工具一" in call_kwargs["available_tools"]
+                        assert "tool1" in call_kwargs["available_tools"]
                         assert "服务一" in call_kwargs["available_tools"]
     
     def test_analyze_success_with_tool_calls(self):
@@ -373,13 +373,18 @@ class TestBackgroundAnalyzer:
         
         session_id = "test_session_notify"
         
-        # Mock httpx（在函数内部导入，需要模拟全局模块）
-        with patch("httpx", create=True) as mock_httpx:
-            with patch("system.background_analyzer.get_server_port", return_value=8000):
+        # Mock httpx.AsyncClient
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            with patch("system.config.get_server_port", return_value=8000):
                 mock_client = AsyncMock()
                 mock_response = Mock(status_code=200)
                 mock_client.post = AsyncMock(return_value=mock_response)
-                mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+                
+                # 设置AsyncClient模拟为异步上下文管理器
+                mock_async_client_instance = AsyncMock()
+                mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+                MockAsyncClient.return_value = mock_async_client_instance
                 
                 await background_analyzer._notify_ui_tool_calls(tool_calls, session_id)
                 
@@ -395,12 +400,17 @@ class TestBackgroundAnalyzer:
         """测试通知UI工具调用出错"""
         tool_calls = [{"tool_name": "test"}]
         
-        # Mock httpx抛出异常（在函数内部导入，需要模拟全局模块）
-        with patch("httpx", create=True) as mock_httpx:
-            with patch("system.background_analyzer.get_server_port", return_value=8000):
+        # Mock httpx.AsyncClient
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            with patch("system.config.get_server_port", return_value=8000):
                 mock_client = AsyncMock()
                 mock_client.post = AsyncMock(side_effect=Exception("网络错误"))
-                mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+                
+                # 设置AsyncClient模拟为异步上下文管理器
+                mock_async_client_instance = AsyncMock()
+                mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+                MockAsyncClient.return_value = mock_async_client_instance
                 
                 with patch("system.background_analyzer.logger") as mock_logger:
                     await background_analyzer._notify_ui_tool_calls(tool_calls, "test_session")
@@ -448,17 +458,21 @@ class TestBackgroundAnalyzer:
         session_id = "test_session_mcp"
         analysis_session_id = "analysis_mcp_123"
         
-        # Mock httpx和uuid（在函数内部导入，需要模拟全局模块）
-        with patch("httpx", create=True) as mock_httpx:
-            with patch("system.background_analyzer.uuid") as mock_uuid:
-                with patch("system.background_analyzer.get_server_port", return_value=8003):
-                    mock_uuid.uuid4.return_value = "test-uuid-123"
+        # Mock httpx.AsyncClient和uuid
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            with patch("uuid.uuid4", return_value="test-uuid-123"):
+                with patch("system.config.get_server_port", side_effect=lambda server_type: 8000 if server_type == 'api_server' else 8003):
                     
                     mock_client = AsyncMock()
                     mock_response = Mock(status_code=200)
                     mock_response.json = Mock(return_value={"task_id": "task_123"})
                     mock_client.post = AsyncMock(return_value=mock_response)
-                    mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+                    
+                    # 设置AsyncClient模拟为异步上下文管理器
+                    mock_async_client_instance = AsyncMock()
+                    mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+                    mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+                    MockAsyncClient.return_value = mock_async_client_instance
                     
                     with patch("system.background_analyzer.logger") as mock_logger:
                         await background_analyzer._send_to_mcp_server(
@@ -487,12 +501,18 @@ class TestBackgroundAnalyzer:
         """测试发送任务到MCP服务器出错"""
         mcp_calls = [{"tool_name": "search"}]
         
-        with patch("httpx", create=True) as mock_httpx:
-            with patch("system.background_analyzer.get_server_port", return_value=8003):
+        # Mock httpx.AsyncClient
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            with patch("system.config.get_server_port", return_value=8003):
                 mock_client = AsyncMock()
                 mock_response = Mock(status_code=500, text="服务器错误")
                 mock_client.post = AsyncMock(return_value=mock_response)
-                mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+                
+                # 设置AsyncClient模拟为异步上下文管理器
+                mock_async_client_instance = AsyncMock()
+                mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+                MockAsyncClient.return_value = mock_async_client_instance
                 
                 with patch("system.background_analyzer.logger") as mock_logger:
                     await background_analyzer._send_to_mcp_server(mcp_calls, "test_session")
@@ -507,17 +527,21 @@ class TestBackgroundAnalyzer:
         session_id = "test_session_agent"
         analysis_session_id = "analysis_agent_123"
         
-        # Mock httpx和uuid（在函数内部导入，需要模拟全局模块）
-        with patch("httpx", create=True) as mock_httpx:
-            with patch("system.background_analyzer.uuid") as mock_uuid:
-                with patch("system.background_analyzer.get_server_port", return_value=8001):
-                    mock_uuid.uuid4.return_value = "test-uuid-agent-123"
+        # Mock httpx.AsyncClient和uuid
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            with patch("uuid.uuid4", return_value="test-uuid-agent-123"):
+                with patch("system.config.get_server_port", side_effect=lambda server_type: 8001 if server_type == 'agent_server' else 8000):
                     
                     mock_client = AsyncMock()
                     mock_response = Mock(status_code=200)
                     mock_response.json = Mock(return_value={"task_id": "agent_task_123"})
                     mock_client.post = AsyncMock(return_value=mock_response)
-                    mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+                    
+                    # 设置AsyncClient模拟为异步上下文管理器
+                    mock_async_client_instance = AsyncMock()
+                    mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+                    mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+                    MockAsyncClient.return_value = mock_async_client_instance
                     
                     with patch("system.background_analyzer.logger") as mock_logger:
                         await background_analyzer._send_to_agent_server(

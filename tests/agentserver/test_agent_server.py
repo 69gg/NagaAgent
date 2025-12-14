@@ -14,7 +14,6 @@ import uuid
 from typing import Dict, Any
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from agentserver.agent_server import app, Modules, _now_iso, lifespan
@@ -458,12 +457,18 @@ class TestSendCallbackNotification:
         """测试发送回调通知成功"""
         from agentserver.agent_server import _send_callback_notification
         
-        # Mock httpx（在函数内部导入，需要模拟全局模块）
-        with patch("httpx", create=True) as mock_httpx:
+        # Mock httpx.AsyncClient
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            # 创建模拟客户端
             mock_client = AsyncMock()
             mock_response = Mock(status_code=200)
             mock_client.post = AsyncMock(return_value=mock_response)
-            mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+            
+            # 设置AsyncClient模拟为异步上下文管理器
+            mock_async_client_instance = AsyncMock()
+            mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+            MockAsyncClient.return_value = mock_async_client_instance
             
             # Mock日志
             with patch("agentserver.agent_server.logger") as mock_logger:
@@ -498,11 +503,18 @@ class TestSendCallbackNotification:
         """测试发送回调通知（服务器错误响应）"""
         from agentserver.agent_server import _send_callback_notification
         
-        with patch("httpx", create=True) as mock_httpx:
+        # Mock httpx.AsyncClient
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            # 创建模拟客户端
             mock_client = AsyncMock()
             mock_response = Mock(status_code=500)
             mock_client.post = AsyncMock(return_value=mock_response)
-            mock_httpx.AsyncClient.return_value.__aenter__.return_value = mock_client
+            
+            # 设置AsyncClient模拟为异步上下文管理器
+            mock_async_client_instance = AsyncMock()
+            mock_async_client_instance.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_async_client_instance.__aexit__ = AsyncMock(return_value=None)
+            MockAsyncClient.return_value = mock_async_client_instance
             
             with patch("agentserver.agent_server.logger") as mock_logger:
                 await _send_callback_notification(
@@ -521,8 +533,10 @@ class TestSendCallbackNotification:
         """测试发送回调通知异常"""
         from agentserver.agent_server import _send_callback_notification
         
-        with patch("httpx", create=True) as mock_httpx:
-            mock_httpx.AsyncClient.side_effect = Exception("网络错误")
+        # Mock httpx.AsyncClient抛出异常
+        with patch("httpx.AsyncClient") as MockAsyncClient:
+            # 设置AsyncClient抛出异常
+            MockAsyncClient.side_effect = Exception("网络错误")
             
             with patch("agentserver.agent_server.logger") as mock_logger:
                 await _send_callback_notification(
