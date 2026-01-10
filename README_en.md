@@ -300,6 +300,55 @@ Install `neo4j` using `docker` or install `Neo4j Desktop`, then configure the Ne
   },
   ```
 
+#### Enable GPT-SoVITS Text-to-Speech
+
+GPT-SoVITS is a high-performance TTS system with voice cloning support. When enabled, it will replace the default edge-tts with an externally deployed GPT-SoVITS service.
+
+**Configuration Steps:**
+
+1. **Deploy GPT-SoVITS service** (if not yet deployed)
+   ```bash
+   # Refer to the official GPT-SoVITS repository for deployment
+   # Default runs at http://127.0.0.1:9880
+   ```
+
+2. **Prepare reference audio**
+   - Select a clear audio clip (recommended 10-30 seconds)
+   - Accurately record the text content of that audio
+   - Ensure the GPT-SoVITS service can access the reference audio path
+
+3. **Configure config.json**
+   ```json
+   {
+     "tts": {
+       "sovits": {
+         "enabled": true,       // Enable GPT-SoVITS (highest priority）
+         "api_url": "http://127.0.0.1:9880",  // SoVITS API address
+         "reference_audio": "/path/to/reference.wav",  // Reference audio path
+         "reference_text": "Text content of reference audio",  // Must match the audio
+         "language": "zh",        // Language code: zh/ja/en
+         "timeout": 120           // Request timeout (seconds）
+       }
+     }
+   }
+   ```
+
+**Features:**
+
+- **Voice Cloning**: Clone specific voice timbre using reference audio
+- **Streaming Support**: In streaming mode, immediately synthesize when encountering punctuation (。；！？)
+- **Sequential Playback**: Ensure multiple audio files play in sentence order without disorder
+- **Auto Cleanup**: Automatically delete temporary audio files after playback
+- **Highest Priority**: When `sovits.enabled = true`, other TTS configurations will be ignored
+
+**Important Notes:**
+
+- Ensure the reference audio path is an absolute path accessible by the GPT-SoVITS service
+- `reference_text` must accurately match the content of the reference audio
+- If SoVITS inference is slow, you can appropriately increase the `timeout` value
+- Streaming mode punctuation: 。；！？.\\?\\!\\; (commas not included）
+- Non-streaming mode: Split by period mark and generate asynchronously
+
 > For other configuration options, please refer to the comments in the file.
 
 </details>

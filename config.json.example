@@ -62,15 +62,34 @@
     "playwright_headless": false // Playwright是否无头模式
   },
   "tts": {
-    "api_key": "", // TTS API密钥
-    "port": 5048, // TTS服务端口
-    "default_voice": "zh-CN-XiaoxiaoNeural", // 默认语音
-    "default_format": "mp3", // 默认音频格式
-    "default_speed": 1.0, // 默认语速
-    "default_language": "zh-CN", // 默认语言
-    "remove_filter": false, // 是否移除过滤器
-    "expand_api": true, // 是否扩展API
-    "require_api_key": false // 是否需要API密钥
+    "api_key": "", // TTS API密钥（仅用于 edge-tts）
+    "port": 5048, // TTS服务端口（仅用于 edge-tts）
+    "default_voice": "zh-CN-XiaoxiaoNeural", // 默认语音（仅用于 edge-tts）
+    "default_format": "mp3", // 默认音频格式（仅用于 edge-tts）
+    "default_speed": 1.0, // 默认语速（仅用于 edge-tts）
+    "default_language": "zh-CN", // 默认语言（仅用于 edge-tts）
+    "remove_filter": false, // 是否移除过滤器（仅用于 edge-tts）
+    "expand_api": true, // 是否扩展API（仅用于 edge-tts）
+    "require_api_key": false, // 是否需要API密钥（仅用于 edge-tts）
+    
+    // ====== GPT-SoVITS 配置（优先级高）=====
+    // 当 sovits.enabled 为 true 时，将无视上述 edge-tts 相关配置，强制使用 GPT-SoVITS
+    "sovits": {
+      "enabled": false, // 是否启用 GPT-SoVITS（设为 true 后，TTS 相关配置将被忽略）
+      
+      "api_url": "http://127.0.0.1:9880", // GPT-SoVITS API 服务地址（默认端口 9880）
+      
+      "reference_audio": "/path/to/reference.wav", // 参考音频文件路径（用于声音克隆）
+      // 注意：必须是 GPT-SoVITS 服务器可以访问的绝对路径
+      
+      "reference_text": "参考音频对应的文本内容", // 参考音频对应的文本内容（必须与 reference_audio 匹配）
+      // 示例："你好，我是娜迦日达。"
+      
+      "language": "zh", // 语言代码（支持：zh=中文, ja=日语, en=英文）
+      
+      "timeout": 120 // TTS 请求超时时间（单位：秒，建议 60-180 秒）
+      // 如果 SoVITS 推理较慢，可适当增加此值
+    }
   },
   "game": {
     "enabled": false, // 是否启用游戏功能

@@ -27,13 +27,14 @@ except ImportError:
 
 logger = logging.getLogger("StreamingToolCallExtractor")
 
+
 class CallbackManager:
     """回调函数管理器 - 统一处理同步/异步回调"""
-    
+
     def __init__(self):
         self.callbacks = {}
         self.callback_types = {}  # 缓存回调函数类型
-    
+
     def register_callback(self, name: str, callback: Optional[Callable]):
         """注册回调函数"""
         self.callbacks[name] = callback
@@ -42,13 +43,13 @@ class CallbackManager:
             self.callback_types[name] = asyncio.iscoroutinefunction(callback)
         else:
             self.callback_types[name] = False
-    
+
     async def call_callback(self, name: str, *args, **kwargs):
         """统一调用回调函数"""
         callback = self.callbacks.get(name)
         if not callback:
             return None
-            
+
         try:
             if self.callback_types.get(name, False):
                 # 异步回调
@@ -60,36 +61,35 @@ class CallbackManager:
             logger.error(f"回调函数 {name} 执行错误: {e}")
             return None
 
+
 class StreamingToolCallExtractor:
     """流式文本切割器 - 实时按句切割并发送给TTS，支持工具调用处理"""
-    
+
     def __init__(self, mcp_manager=None):
         self.mcp_manager = mcp_manager
         self.text_buffer = ""  # 普通文本缓冲区
         self.complete_text = ""  # 完整文本内容
-        self.sentence_endings = r"[。？！；\.\?\!\;]"  # 断句标点
-        
+        self.sentence_endings = r"[。；！？\.\?\!\;]"  # 断句标点（去掉逗号）
+
         # 使用回调管理器
         self.callback_manager = CallbackManager()
-        
+
         # 语音集成（可选）
         self.voice_integration = None
-        
+
         # 工具调用功能已移除
         self.tool_calls_queue = None
-        
-    def set_callbacks(self, 
-                     on_text_chunk: Optional[Callable] = None,
-                     voice_integration=None):
+
+    def set_callbacks(self, on_text_chunk: Optional[Callable] = None, voice_integration=None):
         """设置回调函数"""
         # 注册回调函数（仅文本块）
         self.callback_manager.register_callback("text_chunk", on_text_chunk)
         self.voice_integration = voice_integration
-    
+
     async def process_text_chunk(self, text_chunk: str):
         """
         处理文本块，实时按句切割并发送给语音集成
-        
+
         处理流程：
         1. 累积完整文本（用于最终保存）
         2. 逐字符检查句子结束符
@@ -98,8 +98,7 @@ class StreamingToolCallExtractor:
         """
         if not text_chunk:
             return None
-        
-        
+
         # 调用文本块回调，将文本发送到前端
         results = []
         result = await self.callback_manager.call_callback("text_chunk", text_chunk, "chunk")
@@ -108,7 +107,7 @@ class StreamingToolCallExtractor:
 
         # 累积完整文本（用于最终保存到数据库）
         self.complete_text += text_chunk
-            
+
         # 实时按句切割并发送到TTS
         for char in text_chunk:
             self.text_buffer += char
@@ -125,69 +124,68 @@ class StreamingToolCallExtractor:
                     remaining_sentences = [s for s in sentences[1:] if s.strip()]
                     self.text_buffer = "".join(remaining_sentences)
         return results if results else None
-    
+
     async def _flush_text_buffer(self):
         """刷新文本缓冲区 - 处理流式结束时的剩余文本"""
         if self.text_buffer:
             # 立即发送剩余的未完成句子到语音集成（不阻塞）
             self._send_to_voice_integration(self.text_buffer)
-            
+
             self.text_buffer = ""
             return None
         return None
-    
+
     def _send_to_voice_integration(self, text: str):
         """发送文本到语音集成（不阻塞文本流）"""
         if self.voice_integration:
             try:
                 # 在独立线程中处理TTS，不阻塞文本流
                 import threading
-                threading.Thread(
-                    target=self.voice_integration.receive_text_chunk,
-                    args=(text,),
-                    daemon=True
-                ).start()
+
+                threading.Thread(target=self.voice_integration.receive_text_chunk, args=(text,), daemon=True).start()
             except Exception as e:
                 logger.error(f"发送到语音集成失败: {e}")
-    
+
     # 工具调用相关方法已移除，功能已迁移到background_analyzer
-    
+
     async def finish_processing(self):
         """完成处理，清理剩余内容"""
         results = []
-        
+
         # 处理剩余的文本
         if self.text_buffer:
             result = await self._flush_text_buffer()
             if result:
                 results.append(result)
-        
+
         return results if results else None
-    
+
     def get_complete_text(self) -> str:
         """获取完整文本内容"""
         return self.complete_text
-    
+
     def reset(self):
         """重置提取器状态"""
         self.text_buffer = ""
         self.complete_text = ""
-    
-    async def process_streaming_response(self, llm_service, messages: List[Dict], 
-                                       temperature: float = 0.7, voice_integration=None):
+
+    async def process_streaming_response(
+        self, llm_service, messages: List[Dict], temperature: float = 0.7, voice_integration=None
+    ):
         """处理流式响应，整合LLM调用和TTS处理"""
         if voice_integration:
             self.voice_integration = voice_integration
-        
+
         async for chunk in llm_service.stream_chat_with_context(messages, temperature):
             if chunk.startswith("data: "):
                 # 解码base64内容
                 try:
                     import base64
+
                     data_str = chunk[6:].strip()
-                    if data_str == '[DONE]':
+                    if data_str == "[DONE]":
                         break
-                    decoded = base64.b64decode(data_str).decode('utf-8')
+                    decoded = base64.b64decode(data_str).decode("utf-8")
                     await self.process_text_chunk(decoded)
                 except Exception as e:
                     logger.error(f"处理流式响应块失败: {e}")
@@ -195,8 +193,7 @@ class StreamingToolCallExtractor:
             else:
                 # 直接处理文本内容
                 await self.process_text_chunk(chunk)
-        
+
         # 完成处理
         await self.finish_processing()
         return self.get_complete_text()
-
