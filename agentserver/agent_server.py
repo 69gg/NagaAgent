@@ -14,12 +14,14 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
+from pydantic import ValidationError
 
 from system.config import config, add_config_listener
 from system.background_analyzer import get_background_analyzer
 from agentserver.task_scheduler import get_task_scheduler, TaskStep
 from agentserver.openclaw import get_openclaw_client, set_openclaw_config
 from agentserver.openclaw.embedded_runtime import get_embedded_runtime, EmbeddedRuntime
+from agentserver.game_vision_service import GameVisionService, ScreenshotAnalyzeRequest
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -129,6 +131,7 @@ async def lifespan(app: FastAPI):
         Modules.analyzer = get_background_analyzer()
         # 初始化任务调度器
         Modules.task_scheduler = get_task_scheduler()
+        Modules.game_vision_service = GameVisionService()
 
         # 设置LLM配置用于智能压缩
         if hasattr(config, "api") and config.api:
@@ -284,6 +287,7 @@ class Modules:
     analyzer = None
     task_scheduler = None
     openclaw_client = None
+    game_vision_service = None
 
 
 def _now_iso() -> str:
@@ -442,8 +446,34 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": _now_iso(),
-        "modules": {"analyzer": Modules.analyzer is not None, "openclaw": Modules.openclaw_client is not None},
+        "modules": {
+            "analyzer": Modules.analyzer is not None,
+            "openclaw": Modules.openclaw_client is not None,
+            "game_vision": Modules.game_vision_service is not None,
+        },
     }
+
+
+@app.post("/game/screenshot_analyze")
+async def game_screenshot_analyze(payload: Dict[str, Any]):
+    """截图并调用视觉模型输出三线结果（原图/描述/结构化）。"""
+    if not config.computer_control.enabled:
+        raise HTTPException(503, "computer_control 未启用")
+
+    if Modules.game_vision_service is None:
+        Modules.game_vision_service = GameVisionService()
+
+    try:
+        request = ScreenshotAnalyzeRequest.model_validate(payload or {})
+    except ValidationError as exc:
+        raise HTTPException(400, f"参数校验失败: {exc}")
+
+    try:
+        result = await Modules.game_vision_service.capture_and_analyze(request)
+        return {"success": True, "result": result}
+    except Exception as exc:
+        logger.error(f"游戏截图分析失败: {exc}")
+        raise HTTPException(500, f"截图分析失败: {exc}")
 
 
 @app.post("/schedule")

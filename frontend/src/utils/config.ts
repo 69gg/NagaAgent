@@ -170,6 +170,17 @@ export const DEFAULT_CONFIG = {
     max_dim_size: 1920, // 最大尺寸
     dpi_awareness: true, // 是否启用DPI感知
     safe_mode: true, // 是否启用安全模式
+    screenshot_dir: 'logs/game_screenshots', // 游戏截图保存目录
+    screenshot_format: 'png', // 截图格式
+    screenshot_quality: 95, // 截图质量
+    save_screenshot: true, // 是否保存截图
+    vision_timeout: 45, // 视觉识别超时
+    enable_caption: true, // 是否输出自然语言描述
+    enable_structured: true, // 是否输出结构化结果
+    guide_endpoint: '', // 攻略服务端点
+    guide_timeout: 20, // 攻略服务超时
+    guide_api_key: '', // 攻略服务密钥
+    guide_use_structured: true, // 调攻略时附带结构化信息
   },
   crawl4ai: {
     headless: true, // 是否无头模式

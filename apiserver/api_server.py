@@ -481,6 +481,17 @@ async def api_openclaw_get_task(
     )
 
 
+@app.post("/game/screenshot_analyze")
+async def api_game_screenshot_analyze(payload: Dict[str, Any]):
+    """透传到 agentserver：截图并识别游戏画面（三线结果）。"""
+    return await _call_agentserver(
+        "POST",
+        "/game/screenshot_analyze",
+        json_body=payload,
+        timeout_seconds=max(float(getattr(config.computer_control, "vision_timeout", 45)) + 15.0, 30.0),
+    )
+
+
 @app.get("/system/info", response_model=SystemInfoResponse)
 async def get_system_info():
     """获取系统信息"""

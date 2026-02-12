@@ -47,6 +47,28 @@ export interface MemoryStats {
     taskTimeout: number
   }
 }
+
+export interface GameVisionResult {
+  screenshotId: string
+  screenshotPath: string
+  timestamp: string
+  image: {
+    path: string
+    width: number
+    height: number
+  }
+  caption: string
+  structured: Record<string, any>
+  parseOk: boolean
+  rawModelText: string
+  guide?: {
+    success: boolean
+    statusCode: number
+    data?: Record<string, any>
+    error?: string
+  } | null
+}
+
 export class CoreApiClient extends ApiClient {
   health(): Promise<{
     status: 'healthy'
@@ -251,6 +273,21 @@ export class CoreApiClient extends ApiClient {
     return this.instance.post(`/openclaw/market/items/${itemId}/install`, {}, {
       timeout: 5 * 60 * 1000,
     })
+  }
+
+  screenshotAnalyze(payload: {
+    query?: string
+    sessionId?: string
+    includeGuide?: boolean
+    saveScreenshot?: boolean
+    model?: string
+    modelUrl?: string
+    apiKey?: string
+  }): Promise<{
+    success: boolean
+    result: GameVisionResult
+  }> {
+    return this.instance.post('/game/screenshot_analyze', payload)
   }
 
   getMcpStatus(): Promise<{

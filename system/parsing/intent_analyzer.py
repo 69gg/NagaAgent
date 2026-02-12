@@ -12,11 +12,13 @@ class IntentAnalyzer:
         try:
             tool_calls = parse_non_standard_json(conversation)
             openclaw_calls = [tc for tc in tool_calls if tc.get("agentType") == "openclaw"]
+            game_vision_calls = [tc for tc in tool_calls if tc.get("agentType") == "game_vision"]
             return {
-                "has_tasks": len(openclaw_calls) > 0,
-                "tool_calls": openclaw_calls,
+                "has_tasks": len(openclaw_calls) > 0 or len(game_vision_calls) > 0,
+                "tool_calls": tool_calls,
                 "openclaw_calls": openclaw_calls,
-                "total_count": len(openclaw_calls)
+                "game_vision_calls": game_vision_calls,
+                "total_count": len(tool_calls),
             }
         except Exception as e:
             return {
@@ -24,7 +26,8 @@ class IntentAnalyzer:
                 "error": str(e),
                 "tool_calls": [],
                 "openclaw_calls": [],
-                "total_count": 0
+                "game_vision_calls": [],
+                "total_count": 0,
             }
 
     def extract_openclaw_tasks(self, conversation: str) -> List[Dict[str, Any]]:

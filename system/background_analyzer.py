@@ -256,7 +256,6 @@ class BackgroundAnalyzer:
             return {"has_tasks": False, "reason": f"分析失败: {e}", "tasks": [], "priority": "low"}
 
         try:
-
             tasks = analysis.get("tasks", []) if isinstance(analysis, dict) else []
             tool_calls = analysis.get("tool_calls", []) if isinstance(analysis, dict) else []
 
@@ -316,8 +315,10 @@ class BackgroundAnalyzer:
                 "session_id": session_id,
                 "tool_calls": [
                     {
-                        "tool_name": tool_call.get("tool_name", "未知工具"),
-                        "service_name": tool_call.get("service_name", "未知服务"),
+                        "tool_name": tool_call.get("tool_name")
+                        or ("游戏视觉识别" if tool_call.get("agentType") == "game_vision" else "未知工具"),
+                        "service_name": tool_call.get("service_name")
+                        or ("game_vision" if tool_call.get("agentType") == "game_vision" else "未知服务"),
                         "status": "starting",
                     }
                     for tool_call in tool_calls
@@ -366,12 +367,119 @@ class BackgroundAnalyzer:
         """将工具调用分发到OpenClaw"""
         try:
             openclaw_calls = [tc for tc in tool_calls if tc.get("agentType") == "openclaw"]
+            game_vision_calls = [tc for tc in tool_calls if tc.get("agentType") == "game_vision"]
 
             if openclaw_calls:
                 await self._send_to_openclaw(openclaw_calls, session_id, analysis_session_id)
 
+            if game_vision_calls:
+                await self._send_to_game_vision(game_vision_calls, session_id)
+
         except Exception as e:
             logger.error(f"工具调用分发失败: {e}")
+
+    async def _send_to_game_vision(self, game_vision_calls: List[Dict[str, Any]], session_id: str) -> None:
+        """发送截图识别任务到 agentserver。"""
+        try:
+            import httpx
+
+            from system.config import get_server_port
+
+            for call in game_vision_calls:
+                query = str(call.get("query") or call.get("message") or "请识别当前游戏画面并给出攻略建议").strip()
+                include_guide = bool(call.get("include_guide", True))
+
+                await self._notify_ui_tool_status(
+                    session_id=session_id,
+                    message="正在截图并识别游戏画面",
+                    stage="executing",
+                    auto_hide_ms=0,
+                )
+
+                payload = {
+                    "query": query,
+                    "session_id": session_id,
+                    "include_guide": include_guide,
+                }
+
+                async with httpx.AsyncClient(timeout=90.0) as client:
+                    response = await client.post(
+                        f"http://localhost:{get_server_port('agent_server')}/game/screenshot_analyze",
+                        json=payload,
+                    )
+
+                if response.status_code >= 400:
+                    logger.error(f"[博弈论] 游戏视觉任务失败: {response.status_code} {response.text}")
+                    await self._notify_ui_tool_status(
+                        session_id=session_id,
+                        message="游戏画面识别失败",
+                        stage="none",
+                        auto_hide_ms=1600,
+                    )
+                    continue
+
+                data = response.json()
+                result = data.get("result", {}) if isinstance(data, dict) else {}
+                display_text = self._format_game_vision_reply(result)
+                await self._notify_ui_clawdbot_reply(session_id, display_text)
+                await self._notify_ui_tool_status(
+                    session_id=session_id,
+                    message="游戏识别完成",
+                    stage="none",
+                    auto_hide_ms=1200,
+                )
+
+        except Exception as e:
+            logger.error(f"[博弈论] 发送游戏视觉任务失败: {e}")
+
+    @staticmethod
+    def _format_game_vision_reply(result: Dict[str, Any]) -> str:
+        """将截图识别结果格式化为UI可展示文本。"""
+        caption = str(result.get("caption", "")).strip()
+        structured = result.get("structured") if isinstance(result.get("structured"), dict) else {}
+        guide = result.get("guide") if isinstance(result.get("guide"), dict) else None
+        screenshot_path = str(result.get("screenshot_path", "")).strip()
+
+        parts: List[str] = []
+        if caption:
+            parts.append(f"画面描述：{caption}")
+
+        scene = structured.get("scene") if structured else None
+        game_id = structured.get("game_id") if structured else None
+        if game_id or scene:
+            parts.append(f"结构化：game={game_id or '未知'}，scene={scene or '未知'}")
+
+        targets = structured.get("targets") if structured else None
+        if isinstance(targets, list) and targets:
+            target_names = []
+            for target in targets[:5]:
+                if isinstance(target, dict):
+                    name = str(target.get("name", "")).strip()
+                    if name:
+                        target_names.append(name)
+            if target_names:
+                parts.append(f"关键目标：{', '.join(target_names)}")
+
+        if guide:
+            if guide.get("success"):
+                guide_data = guide.get("data", {})
+                if isinstance(guide_data, dict):
+                    guide_text = guide_data.get("answer") or guide_data.get("reply") or guide_data.get("text")
+                else:
+                    guide_text = str(guide_data)
+                if guide_text:
+                    parts.append(f"攻略建议：{guide_text}")
+            else:
+                error = str(guide.get("error", "")).strip()
+                if error:
+                    parts.append(f"攻略服务暂不可用：{error}")
+
+        if screenshot_path:
+            parts.append(f"截图已保存：{screenshot_path}")
+
+        if not parts:
+            return "截图识别已完成，但暂未提取到有效信息。"
+        return "\n".join(parts)
 
     async def _send_to_openclaw(
         self, openclaw_calls: List[Dict[str, Any]], session_id: str, analysis_session_id: Optional[str] = None

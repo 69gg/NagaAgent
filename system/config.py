@@ -319,6 +319,19 @@ class ComputerControlConfig(BaseModel):
     max_dim_size: int = Field(default=1920, description="逻辑空间最大边尺寸")
     dpi_awareness: bool = Field(default=True, description="是否启用DPI感知（Windows）")
     safe_mode: bool = Field(default=True, description="是否启用安全模式（限制高风险操作）")
+    screenshot_dir: str = Field(
+        default="logs/game_screenshots", description="游戏截图保存目录（相对路径基于项目根目录）"
+    )
+    screenshot_format: str = Field(default="png", description="截图格式（默认png）")
+    screenshot_quality: int = Field(default=95, ge=1, le=100, description="截图质量（jpeg时生效）")
+    save_screenshot: bool = Field(default=True, description="是否保存截图到本地")
+    vision_timeout: int = Field(default=45, ge=5, le=180, description="视觉识别超时时间（秒）")
+    enable_caption: bool = Field(default=True, description="是否输出自然语言画面描述")
+    enable_structured: bool = Field(default=True, description="是否输出结构化识别结果")
+    guide_endpoint: str = Field(default="", description="攻略服务HTTP端点，留空则不调用")
+    guide_timeout: int = Field(default=20, ge=3, le=120, description="攻略服务超时时间（秒）")
+    guide_api_key: str = Field(default="", description="攻略服务API密钥（可选）")
+    guide_use_structured: bool = Field(default=True, description="调用攻略服务时是否附带结构化结果")
 
 
 # 天气服务使用免费API，无需配置
