@@ -17,7 +17,7 @@ from pathlib import Path
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from .config import hot_reload_config, add_config_listener
+from .config import hot_reload_config, add_config_listener, detect_file_encoding
 import json5  # 支持带注释的JSON解析
 
 class ConfigManager:
@@ -208,7 +208,8 @@ class ConfigManager:
     def _load_config_file(self, config_path: str) -> Optional[Dict[str, Any]]:
         """加载配置文件（json5 优先，标准 json 兜底，始终 UTF-8）"""
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            encoding = detect_file_encoding(config_path)
+            with open(config_path, 'r', encoding=encoding) as f:
                 content = f.read()
             # 优先 json5（支持注释）
             try:
