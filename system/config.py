@@ -130,7 +130,10 @@ def bootstrap_config_from_example(config_path: str) -> None:
         return
 
     if IS_PACKAGED:
+        # spec 只打包了 config.json，优先找 example，没有则用 config.json 本身作模板
         example_path = str(Path(sys._MEIPASS) / "config.json.example")  # type: ignore[attr-defined]
+        if not os.path.exists(example_path):
+            example_path = str(Path(sys._MEIPASS) / "config.json")  # type: ignore[attr-defined]
     else:
         example_path = str(Path(config_path).with_name("config.json.example"))
     if not os.path.exists(example_path):
