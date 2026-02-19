@@ -14,10 +14,21 @@ from datetime import datetime
 IS_PACKAGED: bool = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
+def _get_user_data_dir() -> Path:
+    """返回用户可写的应用数据目录"""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", Path.home()))
+    else:
+        base = Path.home()
+    return base / "NagaAgent"
+
+
 def get_config_path() -> str:
-    """返回 config.json 的可写路径（打包后在 exe 同级目录，开发时在项目根目录）"""
+    """返回 config.json 的可写路径"""
     if IS_PACKAGED:
-        return str(Path(sys.executable).parent / "config.json")
+        d = _get_user_data_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        return str(d / "config.json")
     return str(Path(__file__).parent.parent / "config.json")
 
 from pydantic import BaseModel, Field, field_validator
