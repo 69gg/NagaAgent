@@ -37,7 +37,8 @@ nsis:
   unicode: true
   shortcutName: Naga Agent
   include: build/uninstaller.nsh
-  compression: store
+
+compression: store
 
 mac:
   target:
