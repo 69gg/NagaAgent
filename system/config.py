@@ -669,7 +669,7 @@ def build_system_prompt(
     current_time = datetime.now()
     time_info = (
         f"\n【当前时间信息】\n"
-        f"当前日期：{current_time.strftime('%Y年%m月%d日')}\n"
+        f"当前日期：{current_time.year}年{current_time.month:02d}月{current_time.day:02d}日\n"
         f"当前时间：{current_time.strftime('%H:%M:%S')}\n"
         f"当前星期：{current_time.strftime('%A')}"
     )
