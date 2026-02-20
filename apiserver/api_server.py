@@ -348,12 +348,12 @@ def _update_mcporter_firecrawl_config(api_key: Optional[str]) -> Path:
 def _install_agent_browser() -> None:
     if shutil.which("npm") is None:
         raise RuntimeError("未找到 npm，无法安装 agent-browser")
-    code, stdout, stderr = _run_command(["npm", "install", "-g", "agent-browser"], timeout=300)
+    code, stdout, stderr = _run_command(["npm", "install", "-g", "agent-browser", "--force"], timeout=3000)
     if code != 0:
-        raise RuntimeError(stderr or stdout or "npm install -g agent-browser 失败")
+        raise RuntimeError(stderr or stdout or "npm install -g agent-browser --force 失败")
     if shutil.which("agent-browser") is None:
         raise RuntimeError("agent-browser 未安装成功或未在 PATH 中")
-    code, stdout, stderr = _run_command(["agent-browser", "install"], timeout=300)
+    code, stdout, stderr = _run_command(["agent-browser", "install"], timeout=3000)
     if code != 0:
         raise RuntimeError(stderr or stdout or "agent-browser install 失败")
 
