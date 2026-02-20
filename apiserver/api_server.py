@@ -255,7 +255,7 @@ MARKET_ITEMS: List[Dict[str, Any]] = [
 
 
 def _run_command(command: List[str], timeout: int = 30) -> Tuple[int, str, str]:
-    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, shell=(sys.platform == "win32"))
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
