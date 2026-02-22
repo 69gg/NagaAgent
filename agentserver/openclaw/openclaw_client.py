@@ -120,6 +120,8 @@ class OpenClawConfig:
     gateway_token: Optional[str] = None
     # Hooks 认证 token (对应 hooks.token)
     hooks_token: Optional[str] = None
+    # Hooks API 基础路径 (对应 hooks.path)
+    hooks_path: str = "/hooks"
     # 请求超时时间（秒）
     timeout: int = 120
     # 默认参数
@@ -135,6 +137,15 @@ class OpenClawConfig:
             self.gateway_token = self.token
         if self.token and not self.hooks_token:
             self.hooks_token = self.token
+
+        # 规范化 hooks_path，避免出现 "hooks" / "/hooks/" 等差异
+        path = (self.hooks_path or "/hooks").strip()
+        if not path:
+            path = "/hooks"
+        if not path.startswith("/"):
+            path = f"/{path}"
+        path = path.rstrip("/")
+        self.hooks_path = path or "/hooks"
 
     def get_gateway_headers(self) -> Dict[str, str]:
         """获取 Gateway 请求头"""
@@ -153,6 +164,14 @@ class OpenClawConfig:
     def get_headers(self) -> Dict[str, str]:
         """获取请求头（兼容旧代码）"""
         return self.get_gateway_headers()
+
+    def get_hooks_agent_url(self) -> str:
+        """获取 hooks/agent 端点 URL（支持自定义 hooks.path）"""
+        return f"{self.gateway_url}{self.hooks_path}/agent"
+
+    def get_hooks_wake_url(self) -> str:
+        """获取 hooks/wake 端点 URL（支持自定义 hooks.path）"""
+        return f"{self.gateway_url}{self.hooks_path}/wake"
 
 
 class OpenClawClient:
@@ -298,6 +317,8 @@ class OpenClawClient:
 
         # HTTP 超时需要比 OpenClaw 的 timeoutSeconds 更长
         http_timeout = max(timeout_seconds + 30, self.config.timeout)
+        hooks_agent_url = self.config.get_hooks_agent_url()
+        hooks_agent_path = f"{self.config.hooks_path}/agent"
 
         last_error = None
         for attempt in range(1, max_retries + 1):
@@ -305,7 +326,7 @@ class OpenClawClient:
                 client = await self._get_client()
 
                 logger.info(
-                    f"[OpenClaw] 发送消息到 /hooks/agent (尝试 {attempt}/{max_retries}): {message[:50]}... (timeout={timeout_seconds}s)"
+                    f"[OpenClaw] 发送消息到 {hooks_agent_path} (尝试 {attempt}/{max_retries}): {message[:50]}... (timeout={timeout_seconds}s)"
                 )
 
                 self._emit_task_event(
@@ -315,7 +336,7 @@ class OpenClawClient:
                     data={
                         "attempt": attempt,
                         "max_retries": max_retries,
-                        "url": f"{self.config.gateway_url}/hooks/agent",
+                        "url": hooks_agent_url,
                         "session_key": actual_session_key,
                         "deliver": deliver,
                         "wake_mode": wake_mode,
@@ -324,7 +345,7 @@ class OpenClawClient:
                 )
 
                 response = await client.post(
-                    f"{self.config.gateway_url}/hooks/agent",
+                    hooks_agent_url,
                     json=payload,
                     headers=self.config.get_hooks_headers(),
                     timeout=http_timeout,
@@ -458,6 +479,24 @@ class OpenClawClient:
                                 "hooks.allowRequestSessionKey=true 并重启 OpenClaw Gateway。"
                             )
 
+                        task.status = TaskStatus.FAILED
+                        task.error = last_error
+                        self._update_session_info(actual_session_key, None, "error")
+                        self._emit_task_event(
+                            task,
+                            kind="state",
+                            message="task_failed",
+                            data={"error": last_error},
+                        )
+                        logger.error(f"[OpenClaw] {last_error}")
+                        break
+
+                    if response.status_code == 405:
+                        last_error = (
+                            f"HTTP 405: Method Not Allowed (url={hooks_agent_url})。"
+                            f"请检查 openclaw.json 的 hooks.path（当前客户端路径: {self.config.hooks_path}）"
+                            "是否与 Gateway 一致，并确认 gateway.mode=local 后重启 Gateway。"
+                        )
                         task.status = TaskStatus.FAILED
                         task.error = last_error
                         self._update_session_info(actual_session_key, None, "error")
@@ -695,11 +734,12 @@ class OpenClawClient:
             client = await self._get_client()
 
             payload = {"text": text, "mode": mode}
+            hooks_wake_url = self.config.get_hooks_wake_url()
 
             logger.info(f"[OpenClaw] 触发系统事件: {text[:50]}...")
 
             response = await client.post(
-                f"{self.config.gateway_url}/hooks/wake", json=payload, headers=self.config.get_hooks_headers()
+                hooks_wake_url, json=payload, headers=self.config.get_hooks_headers()
             )
 
             if response.status_code == 200:

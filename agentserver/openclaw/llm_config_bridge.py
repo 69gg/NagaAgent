@@ -29,6 +29,19 @@ def _apply_hooks_compat_patch(config_data: Dict[str, Any]) -> bool:
     return True
 
 
+def _apply_gateway_mode_compat_patch(config_data: Dict[str, Any]) -> bool:
+    """
+    兼容 OpenClaw Gateway 启动约束：
+    当 gateway.mode 缺失/为空时补齐为 local，避免启动被阻塞。
+    """
+    gateway = config_data.setdefault("gateway", {})
+    mode = gateway.get("mode")
+    if isinstance(mode, str) and mode.strip():
+        return False
+    gateway["mode"] = "local"
+    return True
+
+
 def ensure_hooks_allow_request_session_key(auto_create: bool = False) -> bool:
     """
     确保 openclaw.json 中启用 hooks.allowRequestSessionKey=true。
@@ -65,6 +78,45 @@ def ensure_hooks_allow_request_session_key(auto_create: bool = False) -> bool:
         return True
     except Exception as e:
         logger.error(f"写入 openclaw.json 失败，hooks 兼容补丁未生效: {e}")
+        return False
+
+
+def ensure_gateway_local_mode(auto_create: bool = False) -> bool:
+    """
+    确保 openclaw.json 的 gateway.mode 已设置为 local（仅在缺失时补齐）。
+
+    Args:
+        auto_create: 当配置不存在时是否自动创建最小配置
+
+    Returns:
+        True 表示已满足条件（已存在或已修复），False 表示修复失败
+    """
+    if not OPENCLAW_CONFIG_FILE.exists():
+        if not auto_create:
+            logger.debug("openclaw.json 不存在，跳过 gateway.mode 兼容补丁")
+            return False
+        if not ensure_openclaw_config():
+            return False
+
+    try:
+        config_data = json.loads(OPENCLAW_CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error(f"读取 openclaw.json 失败，无法应用 gateway.mode 兼容补丁: {e}")
+        return False
+
+    changed = _apply_gateway_mode_compat_patch(config_data)
+    if not changed:
+        return True
+
+    try:
+        OPENCLAW_CONFIG_FILE.write_text(
+            json.dumps(config_data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        logger.info("已补齐 OpenClaw gateway.mode=local（兼容旧配置）")
+        return True
+    except Exception as e:
+        logger.error(f"写入 openclaw.json 失败，gateway.mode 兼容补丁未生效: {e}")
         return False
 
 
@@ -137,6 +189,7 @@ def inject_naga_llm_config() -> bool:
 
         config_data = json.loads(OPENCLAW_CONFIG_FILE.read_text(encoding="utf-8"))
         _apply_hooks_compat_patch(config_data)
+        _apply_gateway_mode_compat_patch(config_data)
 
         # 构建 naga provider
         provider_name = "naga"

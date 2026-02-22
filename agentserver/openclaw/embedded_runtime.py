@@ -555,9 +555,13 @@ class EmbeddedRuntime:
         config_file = Path.home() / ".openclaw" / "openclaw.json"
         if config_file.exists():
             try:
-                from .llm_config_bridge import ensure_hooks_allow_request_session_key
+                from .llm_config_bridge import (
+                    ensure_hooks_allow_request_session_key,
+                    ensure_gateway_local_mode,
+                )
 
                 ensure_hooks_allow_request_session_key(auto_create=False)
+                ensure_gateway_local_mode(auto_create=False)
             except Exception as e:
                 logger.warning(f"配置兼容补丁执行失败（可忽略）: {e}")
             self._onboarded = True
@@ -569,12 +573,14 @@ class EmbeddedRuntime:
                 ensure_openclaw_config,
                 inject_naga_llm_config,
                 ensure_hooks_allow_request_session_key,
+                ensure_gateway_local_mode,
             )
 
             try:
                 ensure_openclaw_config()
                 inject_naga_llm_config()
                 ensure_hooks_allow_request_session_key(auto_create=False)
+                ensure_gateway_local_mode(auto_create=False)
                 self._onboarded = True
                 logger.info("已自动生成 OpenClaw 配置")
                 return True

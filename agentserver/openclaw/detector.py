@@ -31,6 +31,7 @@ class OpenClawStatus:
     # Hooks 配置
     hooks_enabled: bool = False
     hooks_token: Optional[str] = None
+    hooks_path: str = "/hooks"
 
     # 连接状态
     gateway_reachable: bool = False
@@ -51,6 +52,7 @@ class OpenClawStatus:
             "gateway_enabled": self.gateway_enabled,
             "hooks_enabled": self.hooks_enabled,
             "hooks_token": self.hooks_token,
+            "hooks_path": self.hooks_path,
             "gateway_reachable": self.gateway_reachable,
             "version": self.version,
             "workspace": self.workspace,
@@ -144,6 +146,11 @@ class OpenClawDetector:
         hooks = config.get("hooks", {})
         status.hooks_enabled = hooks.get("enabled", False)
         status.hooks_token = hooks.get("token")
+        hooks_path = hooks.get("path", "/hooks")
+        if isinstance(hooks_path, str) and hooks_path.strip():
+            status.hooks_path = hooks_path
+        else:
+            status.hooks_path = "/hooks"
 
         # 版本信息
         meta = config.get("meta", {})

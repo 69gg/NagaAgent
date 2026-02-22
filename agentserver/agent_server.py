@@ -139,6 +139,7 @@ async def lifespan(app: FastAPI):
                 ensure_openclaw_config,
                 inject_naga_llm_config,
                 ensure_hooks_allow_request_session_key,
+                ensure_gateway_local_mode,
             )
 
             embedded_runtime = get_embedded_runtime()
@@ -201,9 +202,12 @@ async def lifespan(app: FastAPI):
             # === 统一：按运行时来源处理配置与 Gateway ===
             openclaw_available = has_global_openclaw or has_embedded_openclaw
             if openclaw_available:
-                # 兼容 OpenClaw 2026.2.17+：确保 hooks 允许外部 sessionKey（必须在 Gateway 启动前/初始化前补齐）
-                ensure_hooks_allow_request_session_key(auto_create=False)
                 use_embedded_openclaw = _should_use_embedded_openclaw(embedded_runtime)
+                # 兼容旧配置：内嵌 Gateway 场景下补齐 gateway.mode=local，避免启动被阻塞
+                if use_embedded_openclaw:
+                    ensure_gateway_local_mode(auto_create=False)
+                # 兼容 OpenClaw 2026.2.17+：确保 hooks 允许外部 sessionKey
+                ensure_hooks_allow_request_session_key(auto_create=False)
 
                 # 仅在内嵌 OpenClaw 场景下自动写 ~/.openclaw 配置并注入 Naga LLM 配置
                 if use_embedded_openclaw:
@@ -229,6 +233,7 @@ async def lifespan(app: FastAPI):
                     gateway_url=openclaw_status.gateway_url or "http://127.0.0.1:18789",
                     gateway_token=openclaw_status.gateway_token,
                     hooks_token=openclaw_status.hooks_token,
+                    hooks_path=getattr(openclaw_status, "hooks_path", "/hooks"),
                     timeout=120,
                 )
                 logger.info(f"OpenClaw 配置: {openclaw_config.gateway_url}")
@@ -247,6 +252,9 @@ async def lifespan(app: FastAPI):
                     if hasattr(config, "openclaw")
                     else None,
                     hooks_token=getattr(config.openclaw, "hooks_token", None) if hasattr(config, "openclaw") else None,
+                    hooks_path=getattr(config.openclaw, "hooks_path", "/hooks")
+                    if hasattr(config, "openclaw")
+                    else "/hooks",
                     timeout=120,
                 )
                 logger.info(f"OpenClaw 未检测到安装，使用配置文件: {openclaw_config.gateway_url}")
@@ -842,6 +850,7 @@ async def configure_openclaw(payload: Dict[str, Any]):
         openclaw_config = ClientOpenClawConfig(
             gateway_url=payload.get("gateway_url", "http://localhost:18789"),
             token=payload.get("token"),
+            hooks_path=payload.get("hooks_path", "/hooks"),
             timeout=payload.get("timeout", 120),
             default_model=payload.get("default_model"),
             default_channel=payload.get("default_channel", "last"),
