@@ -160,7 +160,7 @@ function triggerFileInput() {
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files && input.files.length > 0) {
-    customChar.modelFile = input.files[0]
+    customChar.modelFile = input.files[0] ?? null
   }
 }
 

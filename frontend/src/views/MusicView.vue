@@ -40,11 +40,11 @@ function getSeekRatio(clientX: number): number {
 }
 
 function onBarSeek(e: MouseEvent | TouchEvent) {
-  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+  const clientX = 'touches' in e ? e.touches[0]!.clientX : e.clientX
   seek(getSeekRatio(clientX) * duration.value)
 
   const onMove = (ev: MouseEvent | TouchEvent) => {
-    const x = 'touches' in ev ? ev.touches[0].clientX : ev.clientX
+    const x = 'touches' in ev ? ev.touches[0]!.clientX : ev.clientX
     seek(getSeekRatio(x) * duration.value)
   }
   const onUp = () => {
