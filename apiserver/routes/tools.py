@@ -47,6 +47,30 @@ def _hide_tool_status_in_ui() -> None:
     _tool_status_store["current"] = {"message": "", "visible": False}
 
 
+def _format_tool_payload(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _build_tool_result_blocks(results: list[Dict[str, Any]]) -> str:
+    blocks: list[str] = []
+    for item in results:
+        service_name = str(item.get("service_name") or "mcp")
+        tool_name = str(item.get("tool_name") or "").strip()
+        ok = str(item.get("status") or "").lower() in {"ok", "success"}
+        marker = "✅" if ok else "❌"
+        label = f"{service_name}: {tool_name}" if tool_name else service_name
+        result = item.get("result") if ok else item.get("error", item.get("result", ""))
+        blocks.append(f"```tool-result\n{marker} {label}\n{_format_tool_payload(result).strip()}\n```")
+    return "\n\n".join(blocks)
+
+
 async def _update_proactive_activity_silent():
     """异步更新用户活动时间（静默失败，不影响主流程）"""
     try:
@@ -406,6 +430,17 @@ async def ui_notification(payload: Dict[str, Any]):
             ntype = payload.get("type", "info")
             logger.info(f"[UI通知] 通知: [{ntype}] {msg}")
             return {"success": True, "message": "通知已接收"}
+
+        if action == "show_mcp_result":
+            results = payload.get("results", [])
+            if not isinstance(results, list):
+                raise HTTPException(400, "results 必须是数组")
+            result_blocks = _build_tool_result_blocks([r for r in results if isinstance(r, dict)])
+            if result_blocks:
+                _clawdbot_replies.append(result_blocks)
+                logger.info(f"[UI通知] MCP结果已存储到队列，数量: {len(results)}")
+                return {"success": True, "message": "MCP结果已存储"}
+            return {"success": True, "message": "MCP结果为空"}
 
         # ── 以下动作需要 session_id ──
 

@@ -85,6 +85,16 @@ def _extract_refresh_token(resp: httpx.Response) -> Optional[str]:
         return None
 
 
+def should_use_model_gateway() -> bool:
+    """当前请求是否应走 NagaModel 网关。"""
+    try:
+        from system.config import get_config
+
+        return bool(is_authenticated() and get_config().api.use_gateway)
+    except Exception:
+        return is_authenticated()
+
+
 # 模块加载时恢复 refresh_token
 _load_refresh_token()
 

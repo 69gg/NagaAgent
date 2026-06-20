@@ -1217,6 +1217,28 @@ def format_tool_results_for_llm(results: List[Dict[str, Any]]) -> str:
     return "\n\n".join(parts)
 
 
+def format_tool_result_for_display(result: Any) -> Any:
+    """保留工具原始结构，并在字符串结果中解开常见 JSON 包装。"""
+    if not isinstance(result, str):
+        return result
+
+    text = result.strip()
+    if not text:
+        return ""
+
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return result
+
+    if isinstance(parsed, dict):
+        if "data" in parsed and parsed.get("status") in {"success", "ok"}:
+            return parsed["data"]
+        if "result" in parsed:
+            return parsed["result"]
+    return parsed
+
+
 # ---------------------------------------------------------------------------
 # SSE 辅助
 # ---------------------------------------------------------------------------
@@ -1500,15 +1522,12 @@ async def run_agentic_loop(
         # 8. 通知前端工具结果
         result_summaries = []
         for r in results:
-            result_text = r.get("result", "")
-            # 截断过长的结果用于前端显示
-            display_result = result_text[:500] + "..." if len(result_text) > 500 else result_text
             result_summaries.append(
                 {
                     "service_name": r.get("service_name", "unknown"),
                     "tool_name": r.get("tool_name", ""),
                     "status": r.get("status", "unknown"),
-                    "result": display_result,
+                    "result": format_tool_result_for_display(r.get("result", "")),
                 }
             )
         yield _format_sse_event("tool_results", {"results": result_summaries})

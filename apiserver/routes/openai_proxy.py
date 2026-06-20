@@ -42,12 +42,12 @@ def _is_user_configured_api() -> bool:
 
 def _get_upstream_url() -> str:
     """返回上游 URL：用户配置了就使用用户配置，否则走 NagaBusiness。"""
+    if naga_auth.should_use_model_gateway():
+        return NAGABUSINESS_URL
     try:
         from system.config import config as naga_config
         user_base = (getattr(naga_config.api, "base_url", "") or "").strip().rstrip("/")
-        if user_base:
-            if not _is_user_configured_api():
-                return NAGABUSINESS_URL
+        if user_base and _is_user_configured_api():
             return f"{user_base}/chat/completions"
     except Exception:
         pass
@@ -65,7 +65,9 @@ _AUTH_INTERRUPT_DEBOUNCE_SECONDS = 5.0
 
 async def _upstream_headers() -> Dict[str, str]:
     """返回上游请求头：用户配置了 API 则使用用户配置，否则用 NagaBusiness token。"""
-    if _is_user_configured_api():
+    if not naga_auth.should_use_model_gateway():
+        if not _is_user_configured_api():
+            raise HTTPException(status_code=400, detail="未配置本地模型 API，请填写 API 地址和密钥，或启用 NagaModel 网关")
         try:
             from system.config import config as naga_config
             api_key = getattr(naga_config.api, "api_key", "") or ""
@@ -157,7 +159,7 @@ async def _post_with_auth_retry(
     resp = await client.post(upstream_url, json=json_body, headers=headers)
     if upstream_url != NAGABUSINESS_URL:
         return resp
-    if resp.status_code != 401 or not naga_auth.is_authenticated():
+    if resp.status_code != 401 or not naga_auth.should_use_model_gateway():
         return resp
 
     new_token = await _refresh_upstream_token()
@@ -183,7 +185,7 @@ async def _stream_with_auth_retry(
     resp = await stream_ctx.__aenter__()
     if upstream_url != NAGABUSINESS_URL:
         return resp, stream_ctx
-    if resp.status_code != 401 or not naga_auth.is_authenticated():
+    if resp.status_code != 401 or not naga_auth.should_use_model_gateway():
         return resp, stream_ctx
 
     text = await resp.aread()

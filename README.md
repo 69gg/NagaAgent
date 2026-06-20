@@ -144,12 +144,14 @@ pip install -r requirements.txt
     "api_key": "your-api-key",
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-v3.2",
+    "provider": "deepseek",
+    "use_gateway": true,
     "api_format": "openai"
   }
 }
 ```
 
-支持所有 OpenAI 兼容 API（DeepSeek、通义千问、OpenAI、Ollama 等），也支持 Anthropic 原生格式（将 `api_format` 设为 `"anthropic"`）。
+支持所有 OpenAI 兼容 API（DeepSeek、通义千问、OpenAI、Ollama 等），也支持 Anthropic 原生格式（将 `api_format` 设为 `"anthropic"`）。登录 Naga 后默认使用 NagaModel 网关；如需使用本地密钥，在设置页关闭“使用 NagaModel 网关”，或将 `use_gateway` 设为 `false`。
 
 ### 启动
 
@@ -209,7 +211,8 @@ parse_tool_calls_from_text()
 ```
 
 - 文本解析：`json5` 容错解析，全角字符自动标准化
-- SSE 格式：`data: {"type":"content"|"reasoning","text":"..."}\n\n`（直接 JSON，不含 base64）
+- SSE 格式：`data: {"type":"content"|"reasoning"|"tool_calls"|"tool_results","text":...}\n\n`（直接 JSON，不含 base64）
+- 前端会把 MCP / 工具结果作为结构化 `toolEvents` 折叠显示，长结果保留完整内容，不再只显示截断摘要。
 - 循环上限：`max_loop_stream = 5`（可配置）
 
 源码：[`apiserver/agentic_tool_loop.py`](apiserver/agentic_tool_loop.py)
