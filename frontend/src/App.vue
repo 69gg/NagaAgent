@@ -25,8 +25,8 @@ import { useBackground } from '@/composables/useBackground'
 import { useElectron } from '@/composables/useElectron'
 import { useMusicPlayer } from '@/composables/useMusicPlayer'
 import { useParallax } from '@/composables/useParallax'
-import { useStartupProgress } from '@/composables/useStartupProgress'
 import { connectRealtimeUi, disconnectRealtimeUi } from '@/composables/useRealtimeUi'
+import { useStartupProgress } from '@/composables/useStartupProgress'
 import { startToolPolling, stopToolPolling } from '@/composables/useToolStatus'
 import { checkForUpdate, showUpdateDialog, updateInfo } from '@/composables/useVersionCheck'
 import { backendConnected, CONFIG } from '@/utils/config'
@@ -421,7 +421,7 @@ watch(effectiveLive2dSource, (source) => {
   activeLive2dSource.value = source || DEFAULT_STARTUP_LIVE2D_SOURCE
 }, { immediate: true })
 
-watch([activeTabId, activeAgentCharacterTemplate, effectiveLive2dSource], () => {
+watch([activeTabId, activeAgentCharacterTemplate, effectiveLive2dSource, backendConnected], () => {
   live2dRenderKey.value += 1
 })
 

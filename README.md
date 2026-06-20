@@ -674,23 +674,26 @@ NagaAgent/
 <details>
 <summary><b>Live2D 虚拟形象（自定义模型）</b></summary>
 
+在 **终端设置 → 音画配置 → Live2D 模型** 中可以直接上传自定义模型。请选择包含 `.model3.json`、`.moc3`、贴图、动作、物理文件等资源的完整模型目录，上传后会保存到用户数据目录并自动应用；也可以在 **枢机集市 → 角色注册 → 自定义角色** 中录入角色名、提示词并上传同一套 Live2D 模型目录。
+
 ```json
 {
   "web_live2d": {
     "ssaa": 2,
     "model": {
-      "source": "./models/your-model/model.model3.json",
+      "source": "由 GUI 或角色系统自动注入",
       "x": 0.5,
       "y": 1.3,
       "size": 6800
     },
+    "custom_model_id": "上传后自动生成的模型 ID",
     "face_y_ratio": 0.13,
     "tracking_hold_delay_ms": 100
   }
 }
 ```
 
-启用角色卡后，`ai_name` 与 `model.source` 由角色 JSON 自动覆盖，无需手动修改。
+启用角色卡后，`ai_name` 与 `model.source` 由角色 JSON 自动覆盖；使用自定义模型时，持久化的是 `custom_model_id`，`model.source` 会按当前 API 端口动态注入。
 </details>
 
 <details>

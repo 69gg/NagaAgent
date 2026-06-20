@@ -670,23 +670,26 @@ Full-duplex realtime voice chat (requires Qwen DashScope API Key):
 <details>
 <summary><b>Live2D Avatar (Custom Model)</b></summary>
 
+Use **Terminal Settings → Audio/Visual Config → Live2D Model** to upload a custom model. Select the complete model directory that contains `.model3.json`, `.moc3`, textures, motions, physics files, and related assets. The uploaded model is stored under the user data directory and applied automatically. You can also use **Cardinal Market → Character Registration → Custom Character** to enter the character name, prompt, and the same Live2D model directory.
+
 ```json
 {
   "web_live2d": {
     "ssaa": 2,
     "model": {
-      "source": "./models/your-model/model.model3.json",
+      "source": "injected by the GUI or character system",
       "x": 0.5,
       "y": 1.3,
       "size": 6800
     },
+    "custom_model_id": "generated model ID after upload",
     "face_y_ratio": 0.13,
     "tracking_hold_delay_ms": 100
   }
 }
 ```
 
-When a character card is active, `ai_name` and `model.source` are automatically overridden by the character JSON — no manual edits needed.
+When a character card is active, `ai_name` and `model.source` are overridden by the character JSON. For custom models, `custom_model_id` is persisted and `model.source` is dynamically injected with the current API port.
 </details>
 
 <details>
