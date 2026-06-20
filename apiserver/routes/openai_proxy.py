@@ -22,7 +22,11 @@ NAGABUSINESS_URL = "http://62.234.131.204:30031/v1/chat/completions"
 
 
 _DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
-_DEFAULT_API_KEY = "your-api-key-here"
+_DEFAULT_API_KEYS = {
+    "",
+    "your-api-key-here",
+    "sk-placeholder-key-not-set",
+}
 
 
 def _is_user_configured_api() -> bool:
@@ -33,7 +37,7 @@ def _is_user_configured_api() -> bool:
         api_key = (getattr(naga_config.api, "api_key", "") or "").strip()
         if not user_base:
             return False
-        if user_base == _DEFAULT_BASE_URL and (not api_key or api_key == _DEFAULT_API_KEY):
+        if user_base == _DEFAULT_BASE_URL and api_key in _DEFAULT_API_KEYS:
             return False
         return True
     except Exception:

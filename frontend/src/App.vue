@@ -318,7 +318,7 @@ const live2dPeekShellTransition = computed(() => {
 
 // ─── CAS 会话失效弹窗 ──────────────────────────
 const authExpiredVisible = ref(false)
-const { logout: doLogout } = useAuth()
+const { logout: doLogout, skipLogin } = useAuth()
 
 watch(authExpired, (expired) => {
   if (expired && !authExpiredVisible.value) {
@@ -376,6 +376,7 @@ function onLoginSuccess() {
 }
 
 function onLoginSkip() {
+  skipLogin()
   showLoginDialog.value = false
   setAuthExpiredSuppressed(false)
   enterMainContent()

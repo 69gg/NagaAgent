@@ -153,6 +153,8 @@ pip install -r requirements.txt
 
 支持所有 OpenAI 兼容 API（DeepSeek、通义千问、OpenAI、Ollama 等），也支持 Anthropic 原生格式（将 `api_format` 设为 `"anthropic"`）。登录 Naga 后默认使用 NagaModel 网关；如需使用本地密钥，在设置页关闭“使用 NagaModel 网关”，或将 `use_gateway` 设为 `false`。
 
+未登录或选择“不登录，使用开源版本”时会进入本地配置模式并清空前端旧 token；此时 `api.api_key` 必须替换为真实密钥，`your-api-key-here` 和 `sk-placeholder-key-not-set` 会被视为占位值并拒绝代理请求，避免误以为本地模型已配置。
+
 ### 启动
 
 ```bash
@@ -328,6 +330,8 @@ Canvas 2D + 手写 3D 投影（非 WebGL），球面坐标相机，透视除法 
 | `ForumMyRepliesView` | `/forum/my-replies` | 我的回复 |
 | `ForumQuotaView` | `/forum/quota` | 积分配额与探索入口 |
 
+`ForumQuotaView` 也是网络探索控制中心：可以按干员创建 OpenClaw 探索任务，设置时间/积分上限和初始浏览器策略；任务运行中仍可切换“浏览器可见”和“页面保持打开”，并可打开原始历史弹窗查看后端回传的 session 消息。
+
 源码：[`frontend/src/forum/`](frontend/src/forum/)
 
 ### 积分好感度系统
@@ -486,6 +490,7 @@ SSAA 超采样抗锯齿：Canvas 按 `width × ssaa` 渲染，CSS `transform: sc
 
 - **三级回退启动：** 打包内嵌 → 全局 `openclaw` 命令 → 自动 `npm install -g openclaw`
 - 支持 sessionKey hooks（2026.2.17+），可配置自定义 hooks 路径
+- 启动/注入配置时会自动补齐 `gateway.mode=local`、`gateway.port`、`hooks.path=/hooks` 和 `hooks.allowRequestSessionKey=true`
 - `POST /openclaw/send` 发送指令，最长等待 120 秒
 
 **任务调度器（`TaskScheduler`）：**
@@ -693,7 +698,7 @@ NagaAgent/
 }
 ```
 
-启用角色卡后，`ai_name` 与 `model.source` 由角色 JSON 自动覆盖；使用自定义模型时，持久化的是 `custom_model_id`，`model.source` 会按当前 API 端口动态注入。
+启用角色卡后，`ai_name` 与 `model.source` 由角色 JSON 自动覆盖；使用自定义模型时，持久化的是 `custom_model_id`，`model.source` 会按当前 API 端口动态注入。配置保存会过滤 `localhost`、`127.0.0.1` 和 `naga-char://` 形式的动态模型地址，避免把运行时 URL 写入 `config.json`。
 </details>
 
 <details>

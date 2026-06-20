@@ -94,7 +94,11 @@ apiserver/
 | GET  | `/logs/context/statistics` | 日志上下文统计 |
 | GET  | `/logs/context/load` | 加载日志上下文 |
 
-`/system/config` 会读写用户数据目录中的运行时 `config.json`；缺失时由配置模板自动生成。模型连接字段包括 `api.provider`、`api.model`、`api.api_format` 和 `api.use_gateway`，用于区分本地模型供应商与 NagaModel 网关。
+`/system/config` 会读写用户数据目录中的运行时 `config.json`；缺失时由配置模板自动生成。模型连接字段包括 `api.provider`、`api.model`、`api.api_format` 和 `api.use_gateway`，用于区分本地模型供应商与 NagaModel 网关。保存配置时会过滤角色/自定义 Live2D 的运行时 `model.source`，只持久化 `custom_model_id` 等稳定字段；历史 `agentserver` / `mcpserver` 键会归一为 `agent_server` / `mcp_server`。
+
+未登录且 `api.use_gateway=false` 时，OpenAI 兼容代理只接受真实本地 API 配置；`your-api-key-here` 与 `sk-placeholder-key-not-set` 会被识别为占位值并返回配置错误。
+
+OpenClaw 配置桥接会在生成、迁移或注入配置时补齐 `gateway.mode=local`、当前 `gateway.port`、`hooks.path=/hooks` 与 `hooks.allowRequestSessionKey=true`，保证 `/hooks/agent` 和 sessionKey 调度链路可用。
 
 ### 工具 & WebSocket — `routes/tools.py`
 
@@ -115,7 +119,7 @@ apiserver/
 | GET  | `/ws/stats` | WebSocket 连接统计 |
 | POST | `/ws/broadcast` | WebSocket 广播 |
 
-`/ui_notification` 支持 `show_mcp_result`，用于 MCP Server callback 将工具结果写入前端回复队列；前端会按 `tool-result` 结构折叠展示。
+`/ui_notification` 支持 `show_mcp_result`，用于 MCP Server callback 将工具结果写入前端回复队列；前端会按 `tool-result` 结构折叠展示。工具通知、工具结果和 UI 通知接口会保留缺少参数等显式 `400` 错误，避免被统一包装成 `500`。
 
 ### 扩展功能 — `routes/extensions.py`
 
@@ -139,10 +143,13 @@ apiserver/
 | POST | `/travel/stop` | 停止旅行会话 |
 | GET  | `/travel/history` | 旅行历史列表 |
 | GET  | `/travel/history/{session_id}` | 旅行历史详情 |
+| POST | `/travel/sessions/{session_id}/browser` | 更新探索浏览器策略 |
 | GET  | `/memory/stats` | 记忆系统统计 |
 | GET  | `/memory/quintuples` | 获取五元组 |
 | GET  | `/memory/quintuples/search` | 搜索五元组 |
 | GET/POST | `/tools/search` | 搜索代理 |
+
+旅行会话支持运行中更新 `browser_visible`、`browser_keep_open` 与 `browser_idle_timeout_seconds`；前端 `/forum/quota` 会同步这些设置并提供原始历史查看入口，用于排查 OpenClaw session 消息链路。
 
 ### 社区论坛 — `routes/forum.py`
 
@@ -187,6 +194,16 @@ python apiserver/start_server.py api
 
 # 直接使用 uvicorn
 uvicorn apiserver.api_server:app --host 127.0.0.1 --port 8000
+```
+
+## 冒烟验证
+
+```bash
+# 无账号：启动缺失的本地后端并验证未登录、本地配置、工具通知和 OpenClaw 代理链路
+uv run python scripts/smoke_backend.py --skip-auth --start-if-needed
+
+# 有 NagaCAS 账号：额外验证验证码、登录和 /auth/me
+uv run python scripts/smoke_backend.py --username "$NAGA_SMOKE_USERNAME" --password "$NAGA_SMOKE_PASSWORD" --start-if-needed
 ```
 
 ## 代理问题

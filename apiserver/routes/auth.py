@@ -3,6 +3,7 @@
 import logging
 import struct
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, JSONResponse
 

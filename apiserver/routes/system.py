@@ -1,9 +1,11 @@
 """系统信息、健康检查、配置、日志、更新路由"""
 
 import asyncio
+import copy
 import logging
 import traceback
 from typing import Dict, Any, List
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
@@ -49,6 +51,48 @@ def _notification_telemetry_snapshot(config_data: Dict[str, Any]) -> Dict[str, A
         "feishu_has_app": bool(str(feishu_channel.get("app_id") or "").strip()) and bool(str(feishu_channel.get("app_secret") or "").strip()),
         "feishu_deliver_full_report": bool(feishu_notify.get("deliver_full_report", True)),
     }
+
+
+def _sanitize_system_config_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """清洗前端配置保存 payload，避免动态资源 URL 被持久化。"""
+    sanitized = _normalize_system_config_aliases(copy.deepcopy(payload))
+    web_live2d = sanitized.get("web_live2d")
+    if not isinstance(web_live2d, dict):
+        return sanitized
+
+    web_live2d.pop("custom_models", None)
+    model_block = web_live2d.get("model")
+    if not isinstance(model_block, dict):
+        return sanitized
+
+    source = str(model_block.get("source") or "").strip()
+    parsed_source = urlparse(source)
+    is_local_dynamic_url = (
+        parsed_source.scheme in {"http", "https"}
+        and parsed_source.hostname in {"localhost", "127.0.0.1"}
+        and (
+            parsed_source.path.startswith("/characters/")
+            or parsed_source.path.startswith("/custom-live2d/")
+        )
+    )
+    if source.startswith("naga-char://") or is_local_dynamic_url:
+        model_block.pop("source", None)
+    return sanitized
+
+
+def _normalize_system_config_aliases(config_data: Dict[str, Any]) -> Dict[str, Any]:
+    """将历史前端键名归一为后端配置 schema 键名。"""
+    alias_map = {
+        "agentserver": "agent_server",
+        "mcpserver": "mcp_server",
+    }
+    for legacy_key, canonical_key in alias_map.items():
+        legacy_value = config_data.pop(legacy_key, None)
+        if legacy_value is None:
+            continue
+        if canonical_key not in config_data:
+            config_data[canonical_key] = legacy_value
+    return config_data
 
 
 # ============ 根路径 & 健康检查 ============
@@ -121,7 +165,7 @@ async def get_system_info():
 async def get_system_config():
     """获取完整系统配置（web_live2d.model.source 由角色系统动态注入）"""
     try:
-        config_data = get_config_snapshot()
+        config_data = _normalize_system_config_aliases(copy.deepcopy(get_config_snapshot()))
 
         # 动态注入角色 Live2D 模型路径；未启用角色时按 custom_model_id 注入自定义模型路径。
         injected_model_source = False
@@ -164,18 +208,9 @@ async def update_system_config(payload: Dict[str, Any]):
     try:
         before_snapshot = get_config_snapshot()
         before_notification = _notification_telemetry_snapshot(before_snapshot)
-        # 过滤掉由角色/自定义资源系统动态注入的 model.source，避免将 localhost URL 持久化
-        web_live2d = payload.get("web_live2d", {})
-        model_block = web_live2d.get("model", {})
-        if isinstance(web_live2d, dict):
-            web_live2d.pop("custom_models", None)
-        source = model_block.get("source", "")
-        if source and source.startswith("http://localhost") and (
-            "/characters/" in source or "/custom-live2d/" in source
-        ):
-            model_block.pop("source", None)
+        sanitized_payload = _sanitize_system_config_payload(payload)
 
-        success = update_config(payload)
+        success = update_config(sanitized_payload)
         if success:
             after_snapshot = get_config_snapshot()
             after_notification = _notification_telemetry_snapshot(after_snapshot)

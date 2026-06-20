@@ -73,13 +73,13 @@ export const DEFAULT_CONFIG = {
     auto_start: true, // 是否自动启动
     docs_enabled: true, // 是否启用API文档
   },
-  agentserver: {
+  agent_server: {
     enabled: true, // 是否启用代理服务器
     host: '127.0.0.1', // 代理服务器主机
     port: 8001, // 代理服务器端口
     auto_start: true, // 是否自动启动
   },
-  mcpserver: {
+  mcp_server: {
     enabled: true, // 是否启用MCP服务器
     host: '127.0.0.1', // MCP服务器主机
     port: 8003, // MCP服务器端口
@@ -346,6 +346,21 @@ function sanitizeLegacyNotificationConfig(config: Config) {
   }
 }
 
+function sanitizeLegacyServiceConfig(config: Config) {
+  const legacyConfig = config as Config & {
+    agentserver?: typeof config.agent_server
+    mcpserver?: typeof config.mcp_server
+  }
+  if (legacyConfig.agentserver && !legacyConfig.agent_server) {
+    legacyConfig.agent_server = legacyConfig.agentserver
+  }
+  if (legacyConfig.mcpserver && !legacyConfig.mcp_server) {
+    legacyConfig.mcp_server = legacyConfig.mcpserver
+  }
+  delete legacyConfig.agentserver
+  delete legacyConfig.mcpserver
+}
+
 function deepMerge<T extends Record<string, any>>(target: T, source: Record<string, any>): T {
   const result = { ...target }
   for (const key of Object.keys(source)) {
@@ -387,6 +402,7 @@ let connectRetryDelay = 300 // 指数退避起始值
 function connectBackend() {
   API.systemConfig().then((res) => {
     const mergedConfig = deepMerge(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), res.config)
+    sanitizeLegacyServiceConfig(mergedConfig)
     sanitizeLegacyNotificationConfig(mergedConfig)
     CONFIG.value = mergedConfig
     backendConnected.value = true

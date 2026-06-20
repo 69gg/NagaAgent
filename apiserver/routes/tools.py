@@ -1,10 +1,8 @@
 """工具状态、消息队列、前端轮询、主动消息、WebSocket 路由"""
 
-import asyncio
 import json
 import logging
 import time
-import traceback
 from typing import Dict, Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -233,6 +231,8 @@ async def tool_notification(payload: Dict[str, Any]):
             "auto_hide_ms": auto_hide_ms,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"工具调用通知处理失败: {e}")
         raise HTTPException(500, f"处理失败: {str(e)}")
@@ -314,6 +314,8 @@ async def tool_result_callback(payload: Dict[str, Any]):
             "session_id": session_id,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         _hide_tool_status_in_ui()
         logger.error(f"[工具回调] 工具结果回调处理失败: {e}")
@@ -341,6 +343,8 @@ async def tool_result(payload: Dict[str, Any]):
 
         return {"success": True, "message": "工具结果已接收", "result": result, "session_id": session_id}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"处理工具结果失败: {e}")
         raise HTTPException(500, f"处理失败: {str(e)}")
@@ -371,6 +375,8 @@ async def save_tool_conversation(payload: Dict[str, Any]):
 
         return {"success": True, "message": "工具对话历史已保存", "session_id": session_id}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[保存工具对话] 保存工具对话历史失败: {e}")
         raise HTTPException(500, f"保存失败: {str(e)}")
@@ -465,6 +471,8 @@ async def ui_notification(payload: Dict[str, Any]):
 
         return {"success": True, "message": "UI通知已处理"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"处理UI通知失败: {e}")
         raise HTTPException(500, f"处理失败: {str(e)}")
@@ -545,6 +553,8 @@ async def receive_proactive_message(payload: Dict[str, Any]):
             "pushed": pushed,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[ProactiveMessage] 处理主动消息失败: {e}", exc_info=True)
         raise HTTPException(500, f"处理失败: {e}")

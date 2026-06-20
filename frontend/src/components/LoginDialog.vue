@@ -213,7 +213,7 @@ function handleSkip() {
   trackTelemetry('login_skip', {
     mode: mode.value,
   })
-  window.open('https://github.com/RTGS2017/NagaAgent.git', '_blank')
+  emit('skip')
 }
 
 function openForgotPassword() {
