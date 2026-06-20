@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ModelPricing } from '@/api/business'
-import type { MemoryStats } from '@/api/core'
+import type { CustomLive2DModel, MemoryStats } from '@/api/core'
 import { useStorage } from '@vueuse/core'
 import { Accordion, Button, Divider, InputNumber, InputText, Message, Select, Slider, Textarea, ToggleSwitch } from 'primevue'
 import { useToast } from 'primevue/usetoast'
@@ -15,8 +15,9 @@ import NotificationSettingsPanel from '@/components/NotificationSettingsPanel.vu
 import { audioSettings, effectFileOptions, wakeVoiceOptions } from '@/composables/useAudio'
 import { isNagaLoggedIn, nagaUser } from '@/composables/useAuth'
 import { checkForUpdate } from '@/composables/useVersionCheck'
-import { CONFIG, DEFAULT_CONFIG, DEFAULT_MODEL, MODELS, SYSTEM_PROMPT } from '@/utils/config'
+import { backendConnected, CONFIG, DEFAULT_CONFIG, DEFAULT_MODEL, MODELS, SYSTEM_PROMPT } from '@/utils/config'
 import { trackingCalibration } from '@/utils/live2dController'
+import { applyCustomLive2DModel, applyLive2DModel, toCustomLive2DModelConfig, upsertCustomLive2DModel } from '@/utils/live2dModels'
 
 // ── Tab 切换 ──
 type TabKey = 'model' | 'memory' | 'terminal' | 'notifications'
@@ -38,16 +39,13 @@ const characterLockedHint = computed(() =>
     : undefined,
 )
 
-const selectedModel = ref(Object.entries(MODELS).find(([_, model]) => {
+const selectedModel = computed(() => Object.entries(MODELS).find(([_, model]) => {
   return model.source === CONFIG.value.web_live2d.model.source
 })?.[0] ?? DEFAULT_MODEL)
 
-const modelSelectRef = useTemplateRef<{
-  updateModel: (event: null, value: string) => void
-}>('modelSelectRef')
-
 function onModelChange(value: keyof typeof MODELS) {
-  CONFIG.value.web_live2d.model = { ...MODELS[value] }
+  applyLive2DModel({ ...MODELS[value] })
+  CONFIG.value.system.active_character = ''
 }
 
 const ssaaInputRef = useTemplateRef<{
@@ -57,7 +55,7 @@ const ssaaInputRef = useTemplateRef<{
 function recoverUiConfig() {
   if (!characterLocked.value) {
     CONFIG.value.system.ai_name = DEFAULT_CONFIG.system.ai_name
-    modelSelectRef.value?.updateModel(null, DEFAULT_MODEL)
+    onModelChange(DEFAULT_MODEL)
   }
   CONFIG.value.ui.user_name = DEFAULT_CONFIG.ui.user_name
   ssaaInputRef.value?.updateModel(null, DEFAULT_CONFIG.web_live2d.ssaa)
@@ -170,6 +168,112 @@ async function onAutoLaunchChange(value: boolean) {
 }
 
 const checkingUpdate = ref(false)
+const customLive2dModels = computed(() => CONFIG.value.web_live2d.custom_models)
+const customLive2dName = ref('')
+const customLive2dFiles = ref<File[]>([])
+const customLive2dModelPath = ref('')
+const customLive2dUploading = ref(false)
+const customLive2dLoading = ref(false)
+const customLive2dFileInputRef = ref<HTMLInputElement | null>(null)
+const customLive2dReady = computed(() =>
+  customLive2dName.value.trim() !== '' && customLive2dFiles.value.length > 0,
+)
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0)
+    return '0 KB'
+  if (bytes < 1024 * 1024)
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function getFileRelativePath(file: File) {
+  return file.webkitRelativePath || file.name
+}
+
+function pickCustomLive2dFolder() {
+  customLive2dFileInputRef.value?.click()
+}
+
+function handleCustomLive2dFilesChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  customLive2dFiles.value = files
+  const modelFiles = files
+    .map(getFileRelativePath)
+    .filter(path => path.toLowerCase().endsWith('.model3.json'))
+  customLive2dModelPath.value = modelFiles.length === 1 ? modelFiles[0] ?? '' : ''
+  if (!customLive2dName.value.trim() && customLive2dModelPath.value) {
+    const parts = customLive2dModelPath.value.split('/')
+    customLive2dName.value = parts.length > 1
+      ? parts[parts.length - 2] ?? ''
+      : parts[0]?.replace(/\.model3\.json$/i, '') ?? ''
+  }
+}
+
+async function loadCustomLive2dModels() {
+  if (!backendConnected.value || customLive2dLoading.value)
+    return
+  customLive2dLoading.value = true
+  try {
+    const res = await API.listCustomLive2DModels()
+    CONFIG.value.web_live2d.custom_models = (res.models || []).map(toCustomLive2DModelConfig)
+  }
+  catch {
+    // 后端旧版本或暂不可用时不影响其他设置
+  }
+  finally {
+    customLive2dLoading.value = false
+  }
+}
+
+watch(backendConnected, (connected) => {
+  if (connected) {
+    loadCustomLive2dModels()
+  }
+}, { immediate: true })
+
+async function uploadCustomLive2dModel() {
+  if (!customLive2dReady.value || customLive2dUploading.value)
+    return
+  customLive2dUploading.value = true
+  try {
+    const res = await API.uploadCustomLive2DModel({
+      name: customLive2dName.value.trim(),
+      files: customLive2dFiles.value,
+      modelPath: customLive2dModelPath.value || undefined,
+    })
+    const savedModel = upsertCustomLive2DModel(res.model)
+    applyCustomLive2DModel(savedModel)
+    customLive2dName.value = ''
+    customLive2dFiles.value = []
+    customLive2dModelPath.value = ''
+    if (customLive2dFileInputRef.value) {
+      customLive2dFileInputRef.value.value = ''
+    }
+    toast.add({ severity: 'success', summary: 'Live2D 已应用', detail: res.model.name, life: 2500 })
+  }
+  catch (e: any) {
+    toast.add({ severity: 'error', summary: '上传失败', detail: e?.response?.data?.detail || e.message, life: 4000 })
+  }
+  finally {
+    customLive2dUploading.value = false
+  }
+}
+
+async function deleteCustomLive2dModel(model: CustomLive2DModel | typeof CONFIG.value.web_live2d.custom_models[number]) {
+  try {
+    await API.deleteCustomLive2DModel(model.id)
+    CONFIG.value.web_live2d.custom_models = CONFIG.value.web_live2d.custom_models.filter(item => item.id !== model.id)
+    if (CONFIG.value.web_live2d.model.source === model.source) {
+      applyLive2DModel({ ...MODELS[DEFAULT_MODEL] })
+    }
+    toast.add({ severity: 'info', summary: '已删除', detail: model.name, life: 2200 })
+  }
+  catch (e: any) {
+    toast.add({ severity: 'error', summary: '删除失败', detail: e?.response?.data?.detail || e.message, life: 3000 })
+  }
+}
 
 async function handleCheckUpdate() {
   if (checkingUpdate.value)
@@ -575,6 +679,99 @@ async function testConnection() {
               <InputText v-model="CONFIG.ui.user_name" />
             </ConfigItem>
             <Divider class="m-1!" />
+            <ConfigItem layout="column" name="Live2D 模型" description="上传整套 Cubism 模型目录，或从已保存模型中切换">
+              <div class="live2d-model-panel">
+                <div class="builtin-live2d-row">
+                  <Select
+                    :options="Object.keys(MODELS)"
+                    :model-value="selectedModel"
+                    :disabled="characterLocked"
+                    @change="(event) => onModelChange(event.value)"
+                  />
+                  <Button
+                    size="small"
+                    label="角色注册"
+                    @click="configRouter.push('/market?tab=memory-skin')"
+                  />
+                </div>
+                <div v-if="characterLocked" class="live2d-lock-hint">
+                  {{ characterLockedHint }}
+                </div>
+
+                <div class="custom-live2d-uploader">
+                  <input
+                    ref="customLive2dFileInputRef"
+                    type="file"
+                    webkitdirectory
+                    directory
+                    multiple
+                    hidden
+                    @change="handleCustomLive2dFilesChange"
+                  >
+                  <InputText
+                    v-model="customLive2dName"
+                    class="min-w-0"
+                    placeholder="自定义模型名称"
+                  />
+                  <Button
+                    size="small"
+                    outlined
+                    :label="customLive2dFiles.length ? `${customLive2dFiles.length} 个文件` : '选择目录'"
+                    @click="pickCustomLive2dFolder"
+                  />
+                  <Button
+                    size="small"
+                    label="上传并应用"
+                    :disabled="!customLive2dReady"
+                    :loading="customLive2dUploading"
+                    @click="uploadCustomLive2dModel"
+                  />
+                </div>
+                <div v-if="customLive2dModelPath" class="live2d-path-hint">
+                  入口文件：{{ customLive2dModelPath }}
+                </div>
+
+                <div class="custom-live2d-list">
+                  <div v-if="customLive2dLoading" class="custom-live2d-empty">
+                    正在读取模型列表...
+                  </div>
+                  <div v-else-if="customLive2dModels.length === 0" class="custom-live2d-empty">
+                    暂无自定义 Live2D 模型
+                  </div>
+                  <template v-else>
+                    <div
+                      v-for="model in customLive2dModels"
+                      :key="model.id"
+                      class="custom-live2d-item"
+                      :class="{ active: CONFIG.web_live2d.model.source === model.source }"
+                    >
+                      <div class="custom-live2d-meta">
+                        <div class="custom-live2d-name">{{ model.name }}</div>
+                        <div class="custom-live2d-detail">
+                          {{ model.file_count }} 个文件 · {{ formatFileSize(model.total_bytes) }}
+                        </div>
+                      </div>
+                      <div class="custom-live2d-actions">
+                        <Button
+                          size="small"
+                          :label="CONFIG.web_live2d.model.source === model.source ? '使用中' : '应用'"
+                          :disabled="CONFIG.web_live2d.model.source === model.source"
+                          @click="applyCustomLive2DModel(model)"
+                        />
+                        <Button
+                          size="small"
+                          severity="danger"
+                          outlined
+                          label="删除"
+                          @click="deleteCustomLive2dModel(model)"
+                        />
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </ConfigItem>
+            <Divider class="m-1!" />
             <ConfigItem name="Live2D 模型位置">
               <div class="flex flex-col items-center justify-evenly">
                 <label v-for="direction in ['x', 'y'] as const" :key="direction" class="w-full flex items-center">
@@ -639,14 +836,10 @@ async function testConnection() {
             <ConfigItem name="角色名称" :description="characterLockedHint ?? '聊天窗口显示的 AI 昵称'">
               <InputText v-model="CONFIG.system.ai_name" :disabled="characterLocked" />
             </ConfigItem>
-            <ConfigItem name="L2D 模型" :description="characterLocked ? characterLockedHint : undefined">
-              <Select
-                ref="modelSelectRef"
-                :options="Object.keys(MODELS)"
-                :model-value="selectedModel"
-                :disabled="characterLocked"
-                @change="(event) => onModelChange(event.value)"
-              />
+            <ConfigItem name="L2D 模型" :description="characterLocked ? characterLockedHint : '在上方 Live2D 模型入口切换内置或自定义模型'">
+              <span class="live2d-source-preview">
+                {{ CONFIG.web_live2d.model.source }}
+              </span>
             </ConfigItem>
             <ConfigItem
               layout="column"
@@ -783,6 +976,75 @@ async function testConnection() {
   color: rgba(255, 255, 255, 0.4);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.live2d-model-panel {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.builtin-live2d-row,
+.custom-live2d-uploader,
+.custom-live2d-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.custom-live2d-uploader {
+  flex-wrap: wrap;
+}
+
+.live2d-lock-hint,
+.live2d-path-hint,
+.custom-live2d-empty,
+.live2d-source-preview {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.custom-live2d-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.custom-live2d-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.custom-live2d-item.active {
+  border-color: rgba(74, 222, 128, 0.42);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.custom-live2d-meta {
+  min-width: 0;
+}
+
+.custom-live2d-name {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-live2d-detail {
+  margin-top: 0.15rem;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
 }
 
 .terminal-footer {

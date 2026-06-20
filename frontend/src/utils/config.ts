@@ -9,6 +9,16 @@ export interface Model {
   size: number
 }
 
+export interface CustomLive2DModelConfig {
+  id: string
+  name: string
+  source: string
+  model_path: string
+  file_count: number
+  total_bytes: number
+  created_at: string
+}
+
 export function defineModel(model: Model) {
   return model
 }
@@ -260,6 +270,8 @@ export const DEFAULT_CONFIG = {
   web_live2d: {
     ssaa: 2,
     model: MODELS[DEFAULT_MODEL],
+    custom_models: [] as CustomLive2DModelConfig[],
+    custom_model_id: null as string | null,
     face_y_ratio: 0.13, // 视角追踪面部Y轴位置比例（0=模型顶部, 1=底部）
     tracking_hold_delay_ms: 100, // 按住超过该毫秒数后才开始视角追踪，0=点击即追踪
   },

@@ -3,12 +3,18 @@
 import asyncio
 import logging
 import traceback
-from typing import Dict, Any
+from typing import Dict, Any, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from system.config import get_config, VERSION, build_system_prompt
 from system.config_manager import get_config_snapshot, update_config
+from system.live2d_assets import (
+    create_custom_live2d_model,
+    delete_custom_live2d_model,
+    get_custom_live2d_model,
+    list_custom_live2d_models,
+)
 from apiserver.message_manager import message_manager
 from apiserver.api_server import SystemInfoResponse
 from apiserver.telemetry import emit_telemetry
@@ -117,19 +123,33 @@ async def get_system_config():
     try:
         config_data = get_config_snapshot()
 
-        # 动态注入角色 Live2D 模型路径
+        # 动态注入角色 Live2D 模型路径；未启用角色时按 custom_model_id 注入自定义模型路径。
+        injected_model_source = False
         try:
-            from system.config import load_character, CHARACTERS_DIR
+            from system.config import load_character
             from urllib.parse import quote
             char_name = get_config().system.active_character
-            char_data = load_character(char_name)
-            port = get_config().api_server.port
-            encoded_name = quote(char_name, safe="")
-            encoded_model = quote(char_data["live2d_model"], safe="/")
-            model_url = f"http://localhost:{port}/characters/{encoded_name}/{encoded_model}"
-            config_data.setdefault("web_live2d", {}).setdefault("model", {})["source"] = model_url
+            if char_name:
+                char_data = load_character(char_name)
+                port = get_config().api_server.port
+                encoded_name = quote(char_name, safe="")
+                encoded_model = quote(char_data["live2d_model"], safe="/")
+                model_url = f"http://localhost:{port}/characters/{encoded_name}/{encoded_model}"
+                config_data.setdefault("web_live2d", {}).setdefault("model", {})["source"] = model_url
+                injected_model_source = True
         except Exception as char_err:
             logger.warning(f"角色模型路径注入失败: {char_err}")
+        if not injected_model_source:
+            web_live2d = config_data.setdefault("web_live2d", {})
+            model_block = web_live2d.setdefault("model", {})
+            custom_model_id = str(web_live2d.get("custom_model_id") or "").strip()
+            if custom_model_id:
+                try:
+                    custom_model = get_custom_live2d_model(custom_model_id, get_config().api_server.port)
+                    if custom_model:
+                        model_block["source"] = custom_model["source"]
+                except Exception as custom_err:
+                    logger.warning(f"自定义 Live2D 模型路径注入失败: {custom_err}")
 
         return {"status": "success", "config": config_data}
     except Exception as e:
@@ -144,11 +164,15 @@ async def update_system_config(payload: Dict[str, Any]):
     try:
         before_snapshot = get_config_snapshot()
         before_notification = _notification_telemetry_snapshot(before_snapshot)
-        # 过滤掉由角色系统动态注入的 model.source，避免将 localhost URL 持久化
+        # 过滤掉由角色/自定义资源系统动态注入的 model.source，避免将 localhost URL 持久化
         web_live2d = payload.get("web_live2d", {})
         model_block = web_live2d.get("model", {})
+        if isinstance(web_live2d, dict):
+            web_live2d.pop("custom_models", None)
         source = model_block.get("source", "")
-        if source and "/characters/" in source and source.startswith("http://localhost"):
+        if source and source.startswith("http://localhost") and (
+            "/characters/" in source or "/custom-live2d/" in source
+        ):
             model_block.pop("source", None)
 
         success = update_config(payload)
@@ -266,7 +290,7 @@ async def update_system_prompt(payload: Dict[str, Any]):
 async def get_active_character():
     """获取当前活跃角色信息及资源路径"""
     try:
-        from system.config import load_character, CHARACTERS_DIR
+        from system.config import load_character
         from urllib.parse import quote
         char_name = get_config().system.active_character
         char_data = load_character(char_name)
@@ -334,6 +358,59 @@ async def list_characters():
         logger.error(f"获取角色模板列表失败: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"获取角色模板列表失败: {str(e)}")
+
+
+@router.get("/system/live2d/custom-models")
+async def list_live2d_custom_models() -> Dict[str, Any]:
+    """列出用户上传的自定义 Live2D 模型。"""
+    try:
+        models = list_custom_live2d_models(get_config().api_server.port)
+        return {"status": "success", "models": models}
+    except Exception as e:
+        logger.error(f"获取自定义 Live2D 模型失败: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"获取自定义 Live2D 模型失败: {str(e)}")
+
+
+@router.post("/system/live2d/custom-models")
+async def upload_live2d_custom_model(
+    name: str = Form(...),
+    files: List[UploadFile] = File(...),
+    model_path: str = Form(""),
+) -> Dict[str, Any]:
+    """上传一整套 Live2D 模型资源并登记 .model3.json 入口。"""
+    try:
+        model = await create_custom_live2d_model(
+            name=name,
+            files=files,
+            requested_model_path=model_path or None,
+            api_port=get_config().api_server.port,
+        )
+        return {"status": "success", "model": model}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"上传自定义 Live2D 模型失败: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"上传自定义 Live2D 模型失败: {str(e)}")
+
+
+@router.delete("/system/live2d/custom-models/{model_id}")
+async def remove_live2d_custom_model(model_id: str) -> Dict[str, Any]:
+    """删除用户上传的自定义 Live2D 模型。"""
+    try:
+        deleted = delete_custom_live2d_model(model_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="自定义 Live2D 模型不存在")
+        return {"status": "success", "message": "自定义 Live2D 模型已删除"}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"删除自定义 Live2D 模型失败: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"删除自定义 Live2D 模型失败: {str(e)}")
 
 
 # ============ 更新检查 ============

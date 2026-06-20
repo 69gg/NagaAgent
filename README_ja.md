@@ -672,23 +672,26 @@ Neo4jなしの場合、GRAGはローカルJSONファイルストレージのみ�
 <details>
 <summary><b>Live2Dアバター（カスタムモデル）</b></summary>
 
+**端末設定 → 音声/ビジュアル設定 → Live2Dモデル** からカスタムモデルをアップロードできます。`.model3.json`、`.moc3`、テクスチャ、モーション、物理ファイルなどを含む完全なモデルディレクトリを選択してください。アップロード後はユーザーデータディレクトリに保存され、自動的に適用されます。**枢機集市 → キャラクター登録 → カスタムキャラクター** でも、キャラクター名、プロンプト、同じ Live2D モデルディレクトリを登録できます。
+
 ```json
 {
   "web_live2d": {
     "ssaa": 2,
     "model": {
-      "source": "./models/your-model/model.model3.json",
+      "source": "GUI またはキャラクターシステムが自動注入",
       "x": 0.5,
       "y": 1.3,
       "size": 6800
     },
+    "custom_model_id": "アップロード後に生成されるモデルID",
     "face_y_ratio": 0.13,
     "tracking_hold_delay_ms": 100
   }
 }
 ```
 
-キャラクターカードが有効な場合、`ai_name`と`model.source`はキャラクターJSONによって自動的に上書きされます — 手動編集は不要です。
+キャラクターカードが有効な場合、`ai_name` と `model.source` はキャラクター JSON によって上書きされます。カスタムモデルでは `custom_model_id` が永続化され、`model.source` は現在の API ポートに合わせて動的に注入されます。
 </details>
 
 <details>
