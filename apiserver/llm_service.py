@@ -61,7 +61,12 @@ class LLMService:
             logger.error(f"LLM服务初始化失败: {e}")
             self._initialized = False
 
-    def _get_model_name(self, model: Optional[str] = None, base_url: Optional[str] = None) -> str:
+    def _get_model_name(
+        self,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None,
+        provider: Optional[str] = None,
+    ) -> str:
         """获取 LiteLLM 格式的模型名称
 
         Args:
@@ -72,16 +77,35 @@ class LLMService:
         model = model or cfg.api.model
         base_url = (base_url or cfg.api.base_url or "").lower()
         api_format = cfg.api.api_format
+        provider_name = (provider or cfg.api.provider or "auto").lower()
 
         # NagaModel 网关：使用用户选择的模型名，由服务端路由
         # 需要 openai/ 前缀让 LiteLLM 识别为 OpenAI 兼容提供商
-        if naga_auth.is_authenticated():
+        if naga_auth.should_use_model_gateway():
             return f"openai/{model or 'default'}"
 
         # Anthropic 格式：使用 anthropic/ 前缀让 LiteLLM 走 Anthropic Messages API
-        if api_format == "anthropic":
+        if api_format == "anthropic" or provider_name == "anthropic":
             if not model.startswith("anthropic/"):
                 return f"anthropic/{model}"
+            return model
+
+        if provider_name == "gemini":
+            if not model.startswith("gemini/"):
+                return f"gemini/{model}"
+            return model
+
+        if provider_name == "openrouter":
+            if not model.startswith("openrouter/"):
+                return f"openrouter/{model}"
+            return model
+
+        if provider_name == "deepseek":
+            if not model.startswith("deepseek/"):
+                return f"deepseek/{model}"
+            return model
+
+        if provider_name == "openai":
             return model
 
         # OpenAI 格式：根据 base_url 判断提供商，添加正确的前缀
@@ -100,7 +124,7 @@ class LLMService:
 
     def _get_llm_params(self) -> Dict[str, Any]:
         """获取 LLM 调用参数，NagaModel 登录态时自动切换网关"""
-        if naga_auth.is_authenticated():
+        if naga_auth.should_use_model_gateway():
             token = naga_auth.get_access_token()
             return {
                 "api_key": token,
@@ -123,7 +147,7 @@ class LLMService:
         self, api_key: Optional[str] = None, api_base: Optional[str] = None
     ) -> Dict[str, Any]:
         """获取 LLM 调用参数，支持覆写。NagaModel 登录态优先，否则使用覆写值"""
-        if naga_auth.is_authenticated():
+        if naga_auth.should_use_model_gateway():
             token = naga_auth.get_access_token()
             return {
                 "api_key": token,
@@ -226,7 +250,7 @@ class LLMService:
                     model_name = f"{provider_hint}/{model_name}"
             else:
                 # openai 或未指定: 走原有 base_url 推断逻辑
-                model_name = self._get_model_name(model_name, final_base)
+                model_name = self._get_model_name(model_name, final_base, provider_hint)
 
             response = await acompletion(
                 model=model_name,
@@ -286,7 +310,7 @@ class LLMService:
                 # 如果提供了 model_override，使用覆盖参数替代默认配置
                 if model_override:
                     # NagaModel 登录态：只取 model 名，api_base/api_key 走网关
-                    if naga_auth.is_authenticated():
+                    if naga_auth.should_use_model_gateway():
                         token = naga_auth.get_access_token()
                         model_name = self._get_model_name(
                             model=model_override.get("model"),
@@ -303,6 +327,7 @@ class LLMService:
                         model_name = self._get_model_name(
                             model=model_override.get("model"),
                             base_url=override_base,
+                            provider=model_override.get("provider"),
                         )
                         llm_params = {
                             "api_key": override_key,

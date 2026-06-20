@@ -11,6 +11,8 @@
     "api_key": "your-api-key-here",
     "base_url": "https://api.deepseek.com/v1",
     "model": "deepseek-v3.2",
+    "provider": "deepseek",
+    "use_gateway": true,
     "api_format": "openai",
     "max_tokens": 10000,
     "context_load_days": 3,

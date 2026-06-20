@@ -21,6 +21,11 @@ const isSending = ref(false)
 const messageQueue: Array<{ content: string, options?: any }> = []
 const ttsEnabled = ref(localStorage.getItem('ttsEnabled') !== 'false')
 
+function toolEventName(item: Record<string, any>): string {
+  const service = item.service_name || item.agentType || '工具'
+  return item.tool_name ? `${service}: ${item.tool_name}` : service
+}
+
 async function processQueue() {
   if (messageQueue.length === 0 || isSending.value)
     return
@@ -45,7 +50,14 @@ async function chatStreamInternal(content: string, options?: { skill?: string, i
   isSending.value = true
 
   // 预先推入 assistant 消息（立即显示，不等 API 响应）
-  MESSAGES.value.push({ role: 'assistant', content: '', reasoning: '', generating: true, status: options?.voiceInput ? '理解话语中' : undefined })
+  MESSAGES.value.push({
+    role: 'assistant',
+    content: '',
+    reasoning: '',
+    generating: true,
+    status: options?.voiceInput ? '理解话语中' : undefined,
+    toolEvents: [],
+  })
   const message = MESSAGES.value[MESSAGES.value.length - 1]!
   // 追踪纯LLM内容（不含工具状态标记），用于TTS朗读
   let spokenContent = ''
@@ -112,11 +124,16 @@ async function chatStreamInternal(content: string, options?: { skill?: string, i
       else if (chunk.type === 'tool_calls') {
         // 显示工具调用状态
         const calls = chunk.calls || []
-        const callDesc = calls.map((c: any) => {
-          const service = c.service_name || c.agentType || 'tool'
-          return c.tool_name ? `🔧 ${service}:${c.tool_name}` : `🔧 ${service}`
-        }).join(', ')
-        pushContent(`\n\n> 正在执行工具: ${callDesc}...\n`)
+        const callDesc = calls.map((c: any) => toolEventName(c)).join(', ')
+        message.status = callDesc ? `正在执行工具: ${callDesc}` : '正在执行工具'
+        message.toolEvents = message.toolEvents || []
+        for (const call of calls) {
+          message.toolEvents.push({
+            type: 'tool_call',
+            name: toolEventName(call),
+            args: call,
+          })
+        }
         // OpenClaw 工具可能耗时较长，添加提示
         const hasOpenclaw = calls.some((c: any) => {
           const name = (c.service_name || c.agentType || '').toLowerCase()
@@ -127,16 +144,15 @@ async function chatStreamInternal(content: string, options?: { skill?: string, i
         }
       }
       else if (chunk.type === 'tool_results') {
-        // 工具结果：用 tool-result 代码块标记，Markdown 组件会渲染为可折叠
-        const results = chunk.results || []
-        for (const r of results) {
-          const status = r.status === 'success' ? '✅' : '❌'
-          const service = r.service_name || 'tool'
-          const label = r.tool_name ? `${service}: ${r.tool_name}` : service
-          const resultText = (r.result || '').trim()
-          pushContent(`\n\`\`\`tool-result\n${status} ${label}\n${resultText}\n\`\`\`\n`)
+        message.toolEvents = message.toolEvents || []
+        for (const result of chunk.results || []) {
+          message.toolEvents.push({
+            type: 'tool_result',
+            name: toolEventName(result),
+            isError: result.status !== 'success',
+            result: result.result,
+          })
         }
-        pushContent('\n')
         // 工具结果追加完毕，更新下一轮 content 的起始位置
         roundContentStart = contentBuf.length
       }
@@ -782,13 +798,13 @@ async function sendToAgent(tab: ChatTab, msg: string, options?: { skill?: string
         else if (chunk.type === 'tool_calls') {
           const calls = chunk.calls || []
           assistantMsg.status = calls.length > 0
-            ? `调度工具: ${calls.map(c => c.tool_name || c.service_name || c.agentType || 'tool').join(', ')}`
+            ? `调度工具: ${calls.map(c => toolEventName(c)).join(', ')}`
             : '调度工具中'
           assistantMsg.toolEvents = assistantMsg.toolEvents || []
           for (const call of calls) {
             assistantMsg.toolEvents.push({
               type: 'tool_call',
-              name: call.tool_name || call.service_name || call.agentType || '工具',
+              name: toolEventName(call),
               args: call,
             })
           }
@@ -798,7 +814,7 @@ async function sendToAgent(tab: ChatTab, msg: string, options?: { skill?: string
           for (const result of chunk.results || []) {
             assistantMsg.toolEvents.push({
               type: 'tool_result',
-              name: result.tool_name || result.service_name || '工具',
+              name: toolEventName(result),
               isError: result.status !== 'success',
               result: result.result,
             })

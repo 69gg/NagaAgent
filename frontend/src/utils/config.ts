@@ -45,6 +45,9 @@ export const DEFAULT_CONFIG = {
     api_key: 'your-api-key-here', // LLM API密钥
     base_url: 'https://api.deepseek.com/v1', // API基础URL
     model: 'deepseek-v3.2', // 使用的模型名称
+    provider: 'deepseek', // 模型供应商
+    use_gateway: true, // 登录后是否使用 NagaModel 网关
+    api_format: 'openai', // API调用格式
     temperature: 0.7, // 生成温度 (0.0-2.0)
     max_tokens: 8192, // 最大token数
     max_history_rounds: 10, // 最大历史对话轮数

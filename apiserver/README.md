@@ -94,6 +94,8 @@ apiserver/
 | GET  | `/logs/context/statistics` | 日志上下文统计 |
 | GET  | `/logs/context/load` | 加载日志上下文 |
 
+`/system/config` 会读写用户数据目录中的运行时 `config.json`；缺失时由配置模板自动生成。模型连接字段包括 `api.provider`、`api.model`、`api.api_format` 和 `api.use_gateway`，用于区分本地模型供应商与 NagaModel 网关。
+
 ### 工具 & WebSocket — `routes/tools.py`
 
 | 方法 | 路径 | 说明 |
@@ -112,6 +114,8 @@ apiserver/
 | WS   | `/ws` | WebSocket 实时通信 |
 | GET  | `/ws/stats` | WebSocket 连接统计 |
 | POST | `/ws/broadcast` | WebSocket 广播 |
+
+`/ui_notification` 支持 `show_mcp_result`，用于 MCP Server callback 将工具结果写入前端回复队列；前端会按 `tool-result` 结构折叠展示。
 
 ### 扩展功能 — `routes/extensions.py`
 

@@ -80,14 +80,28 @@ def get_config_path() -> str:
     return str(target)
 
 
+def _get_project_config_template_paths(config_path: str) -> List[Path]:
+    """返回可用于初始化运行时配置的模板候选路径。"""
+    runtime_dir = Path(config_path).parent
+    project_root = Path(__file__).resolve().parent.parent
+    if IS_PACKAGED:
+        bundle_root = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+        return [
+            bundle_root / "config.json.example",
+            bundle_root / "config.json",
+        ]
+    return [
+        runtime_dir / "config.json.example",
+        project_root / "config.json.example",
+        project_root / "config.json",
+    ]
+
+
 _RUNTIME_PROTECTED_CONFIG_PATHS = {
     "system_check",
 }
 
-_MODEL_SYNC_CONFIG_PATHS = {
-    "api.model",
-    "api.api_format",
-}
+_MODEL_SYNC_CONFIG_PATHS: set[str] = set()
 
 
 def _merge_source_config_into_runtime(source_value, target_value, path: str = ""):
@@ -316,26 +330,24 @@ def bootstrap_config_from_example(config_path: str) -> None:
     if os.path.exists(config_path):
         return
 
-    if IS_PACKAGED:
-        # spec 只打包了 config.json，优先找 example，没有则用 config.json 本身作模板
-        example_path = str(Path(sys._MEIPASS) / "config.json.example")  # type: ignore[attr-defined]
-        if not os.path.exists(example_path):
-            example_path = str(Path(sys._MEIPASS) / "config.json")  # type: ignore[attr-defined]
-    else:
-        example_path = str(Path(config_path).with_name("config.json.example"))
-    if not os.path.exists(example_path):
+    example_path = next(
+        (candidate for candidate in _get_project_config_template_paths(config_path) if candidate.exists()),
+        None,
+    )
+    if example_path is None:
         return
 
     try:
-        detected_encoding = detect_file_encoding(example_path)
+        detected_encoding = detect_file_encoding(str(example_path))
         print(f"检测到配置模板编码: {detected_encoding}")
         with open(example_path, "r", encoding=detected_encoding) as example_file:
             example_content = example_file.read()
 
+        Path(config_path).parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w", encoding="utf-8") as config_file:
             config_file.write(example_content)
 
-        print("已自动从 config.json.example 生成 config.json（utf-8）")
+        print(f"已自动从 {example_path.name} 生成 config.json（utf-8）")
     except Exception as e:
         print(f"警告：自动生成 config.json 失败: {e}")
 
@@ -369,6 +381,8 @@ class APIConfig(BaseModel):
     api_key: str = Field(default="sk-placeholder-key-not-set", description="API密钥")
     base_url: str = Field(default="https://api.deepseek.com/v1", description="API基础URL")
     model: str = Field(default="deepseek-v3.2", description="使用的模型名称")
+    provider: str = Field(default="deepseek", description="模型供应商：auto/openai/deepseek/openrouter/anthropic/gemini/custom")
+    use_gateway: bool = Field(default=True, description="登录后是否通过 NagaModel 网关调用模型")
     api_format: str = Field(default="openai", description="API调用格式：openai 或 anthropic")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="温度参数")
     max_tokens: int = Field(default=10000, ge=1, le=32768, description="最大token数")
@@ -385,6 +399,15 @@ class APIConfig(BaseModel):
         if v.lower() not in valid_formats:
             raise ValueError(f"api_format 必须是以下之一: {valid_formats}")
         return v.lower()
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v):
+        valid_providers = ["auto", "openai", "deepseek", "openrouter", "anthropic", "gemini", "custom"]
+        normalized = (v or "auto").lower()
+        if normalized not in valid_providers:
+            raise ValueError(f"provider 必须是以下之一: {valid_providers}")
+        return normalized
 
 
 class APIServerConfig(BaseModel):

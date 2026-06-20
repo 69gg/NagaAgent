@@ -140,12 +140,14 @@ pip install -r requirements.txt
     "api_key": "your-api-key",
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-v3.2",
+    "provider": "deepseek",
+    "use_gateway": true,
     "api_format": "openai"
   }
 }
 ```
 
-OpenAI互換の任意のAPI（DeepSeek、Qwen、OpenAI、Ollamaなど）で動作します。Anthropicネイティブフォーマットにも対応（`api_format`を`"anthropic"`に設定）。
+OpenAI互換の任意のAPI（DeepSeek、Qwen、OpenAI、Ollamaなど）で動作します。Anthropicネイティブフォーマットにも対応（`api_format`を`"anthropic"`に設定）。ログイン後は既定で NagaModel Gateway を使用します。ローカルのプロバイダー認証情報を使う場合は、ターミナル設定で `use_gateway` を無効化します。
 
 ### 起動
 

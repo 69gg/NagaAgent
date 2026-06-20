@@ -140,12 +140,14 @@ Copy `config.json.example` to `config.json` and fill in your LLM API credentials
     "api_key": "your-api-key",
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-v3.2",
+    "provider": "deepseek",
+    "use_gateway": true,
     "api_format": "openai"
   }
 }
 ```
 
-Works with any OpenAI-compatible API (DeepSeek, Qwen, OpenAI, Ollama, etc.), and also supports the native Anthropic format (set `api_format` to `"anthropic"`).
+Works with any OpenAI-compatible API (DeepSeek, Qwen, OpenAI, Ollama, etc.), and also supports the native Anthropic format (set `api_format` to `"anthropic"`). After login, NagaModel Gateway is used by default; disable `use_gateway` in Terminal Settings to use your local provider credentials.
 
 ### Launch
 
